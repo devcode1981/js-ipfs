@@ -1,28 +1,33 @@
 /* eslint-env mocha */
-'use strict'
 
-const { nanoid } = require('nanoid')
-const { getDescribe, getIt, expect } = require('../utils/mocha')
+import { nanoid } from 'nanoid'
+import { expect } from 'aegir/chai'
+import { getDescribe, getIt } from '../utils/mocha.js'
 
-/** @typedef { import("ipfsd-ctl/src/factory") } Factory */
 /**
- * @param {Factory} common
- * @param {Object} options
+ * @typedef {import('ipfsd-ctl').Factory} Factory
  */
-module.exports = (common, options) => {
+
+/**
+ * @param {Factory} factory
+ * @param {object} options
+ */
+export function testRename (factory, options) {
   const describe = getDescribe(options)
   const it = getIt(options)
 
   describe('.key.rename', () => {
+    /** @type {import('ipfs-core-types').IPFS} */
     let ipfs
 
     before(async () => {
-      ipfs = (await common.spawn()).api
+      ipfs = (await factory.spawn()).api
     })
 
-    after(() => common.clean())
+    after(() => factory.clean())
 
     it('should rename a key', async function () {
+      // @ts-expect-error this is mocha
       this.timeout(30 * 1000)
 
       const oldName = nanoid()

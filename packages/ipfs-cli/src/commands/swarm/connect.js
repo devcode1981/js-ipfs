@@ -1,32 +1,32 @@
-'use strict'
-
-const { default: parseDuration } = require('parse-duration')
-const {
+import parseDuration from 'parse-duration'
+import {
   coerceMultiaddr
-} = require('../../utils')
+} from '../../utils.js'
 
-module.exports = {
+/**
+ * @typedef {object} Argv
+ * @property {import('../../types').Context} Argv.ctx
+ * @property {import('@multiformats/multiaddr').Multiaddr} Argv.address
+ * @property {number} Argv.timeout
+ */
+
+/** @type {import('yargs').CommandModule<Argv, Argv>} */
+const command = {
   command: 'connect <address>',
 
   describe: 'Open connection to a given address',
 
   builder: {
     address: {
-      type: 'string',
+      string: true,
       coerce: coerceMultiaddr
     },
     timeout: {
-      type: 'string',
+      string: true,
       coerce: parseDuration
     }
   },
 
-  /**
-   * @param {object} argv
-   * @param {import('../../types').Context} argv.ctx
-   * @param {import('multiaddr').Multiaddr} argv.address
-   * @param {number} argv.timeout
-   */
   async handler ({ ctx: { ipfs, isDaemon, print }, address, timeout }) {
     if (!isDaemon) {
       throw new Error('This command must be run in online mode. Try running \'ipfs daemon\' first.')
@@ -39,3 +39,5 @@ module.exports = {
     print(`${address}`)
   }
 }
+
+export default command

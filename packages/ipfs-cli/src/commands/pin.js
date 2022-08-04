@@ -1,15 +1,22 @@
-'use strict'
+import { commands } from './pin/index.js'
 
-module.exports = {
+/** @type {import('yargs').CommandModule} */
+const command = {
   command: 'pin <command>',
 
-  description: 'Pin and unpin objects to local storage.',
+  describe: 'Pin and unpin objects to local storage',
 
-  /**
-   * @param {import('yargs').Argv} yargs
-   */
   builder (yargs) {
+    commands.forEach(command => {
+      yargs.command(command)
+    })
+
     return yargs
-      .commandDir('pin')
+  },
+
+  handler () {
+
   }
 }
+
+export default command

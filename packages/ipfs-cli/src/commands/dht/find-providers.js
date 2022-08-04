@@ -1,43 +1,59 @@
-'use strict'
+import parseDuration from 'parse-duration'
+import { coerceCID } from '../../utils.js'
 
-const { default: parseDuration } = require('parse-duration')
-const { coerceCID } = require('../../utils')
+/**
+ * @typedef {object} Argv
+ * @property {import('../../types').Context} Argv.ctx
+ * @property {import('multiformats/cid').CID} Argv.key
+ * @property {number} Argv.numProviders
+ * @property {number} Argv.timeout
+ */
 
-module.exports = {
+/** @type {import('yargs').CommandModule<Argv, Argv>} */
+const command = {
   command: 'findprovs <key>',
 
-  describe: 'Find peers that can provide a specific value, given a key.',
+  describe: 'Find peers that can provide a specific value, given a key',
 
   builder: {
     key: {
-      type: 'string',
+      string: true,
       coerce: coerceCID
     },
     'num-providers': {
       alias: 'n',
-      describe: 'The number of providers to find. Default: 20.',
+      describe: 'The number of providers to find. Default: 20',
       default: 20,
-      type: 'number'
+      number: true
     },
     timeout: {
-      type: 'string',
+      string: true,
       coerce: parseDuration
     }
   },
 
-  /**
-   * @param {object} argv
-   * @param {import('../../types').Context} argv.ctx
-   * @param {import('cids')} argv.key
-   * @param {number} argv.numProviders
-   * @param {number} argv.timeout
-   */
   async handler ({ ctx: { ipfs, print }, key, numProviders, timeout }) {
-    for await (const prov of ipfs.dht.findProvs(key, {
-      numProviders,
+    const providers = new Set()
+
+    for await (const event of ipfs.dht.findProvs(key, {
       timeout
     })) {
-      print(prov.id.toString())
+      if (event.name === 'PROVIDER') {
+        event.providers.forEach(peerData => {
+          if (providers.has(peerData.id)) {
+            return
+          }
+
+          providers.add(peerData.id)
+          print(peerData.id.toString())
+        })
+
+        if (providers.size >= numProviders) {
+          break
+        }
+      }
     }
   }
 }
+
+export default command

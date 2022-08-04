@@ -1,62 +1,59 @@
 /* eslint-env mocha */
-'use strict'
 
-const { getDescribe, getIt, expect } = require('../utils/mocha')
-const { expectIsPingResponse, isPong } = require('./utils')
-const all = require('it-all')
-const { isWebWorker } = require('ipfs-utils/src/env')
-const getIpfsOptions = require('../utils/ipfs-options-websockets-filter-all')
+import { expect } from 'aegir/chai'
+import { getDescribe, getIt } from '../utils/mocha.js'
+import all from 'it-all'
+import { isWebWorker } from 'ipfs-utils/src/env.js'
+import { peerIdFromString } from '@libp2p/peer-id'
 
-/** @typedef { import("ipfsd-ctl/src/factory") } Factory */
 /**
- * @param {Factory} common
- * @param {Object} options
+ * @typedef {import('ipfsd-ctl').Factory} Factory
  */
-module.exports = (common, options) => {
-  const ipfsOptions = getIpfsOptions()
+
+/**
+ * @param {Factory} factory
+ * @param {object} options
+ */
+export function testPing (factory, options) {
   const describe = getDescribe(options)
   const it = getIt(options)
 
   describe('.ping', function () {
     this.timeout(60 * 1000)
 
+    /** @type {import('ipfs-core-types').IPFS} */
     let ipfsA
+    /** @type {import('ipfs-core-types').IPFS} */
     let ipfsB
+    /** @type {import('ipfs-core-types/src/root').IDResult} */
+    let nodeBId
 
     before(async () => {
-      ipfsA = (await common.spawn({ type: 'proc', ipfsOptions })).api
+      ipfsA = (await factory.spawn({ type: 'proc' })).api
       // webworkers are not dialable because webrtc is not available
-      ipfsB = (await common.spawn({ type: isWebWorker ? 'go' : undefined })).api
-      await ipfsA.swarm.connect(ipfsB.peerId.addresses[0])
+      ipfsB = (await factory.spawn({ type: isWebWorker ? 'go' : undefined })).api
+      nodeBId = await ipfsB.id()
+      await ipfsA.swarm.connect(nodeBId.addresses[0])
     })
 
-    after(() => common.clean())
+    after(() => factory.clean())
 
     it('should send the specified number of packets', async () => {
       const count = 3
-      const responses = await all(ipfsA.ping(ipfsB.peerId.id, { count }))
-      responses.forEach(expectIsPingResponse)
-
-      const pongs = responses.filter(isPong)
-      expect(pongs.length).to.equal(count)
+      const responses = await all(ipfsA.ping(nodeBId.id, { count }))
+      expect(responses.length).to.be.ok()
+      expect(responses[0].success).to.be.true()
     })
 
     it('should fail when pinging a peer that is not available', () => {
-      const notAvailablePeerId = 'QmUmaEnH1uMmvckMZbh3yShaasvELPW4ZLPWnB4entMTEn'
+      const notAvailablePeerId = peerIdFromString('QmUmaEnH1uMmvckMZbh3yShaasvELPW4ZLPWnB4entMTEn')
       const count = 2
 
       return expect(all(ipfsA.ping(notAvailablePeerId, { count }))).to.eventually.be.rejected()
     })
 
-    it('should fail when pinging an invalid peer Id', () => {
-      const invalidPeerId = 'not a peer ID'
-      const count = 2
-
-      return expect(all(ipfsA.ping(invalidPeerId, { count }))).to.eventually.be.rejected()
-    })
-
     it('can ping without options', async () => {
-      const res = await all(ipfsA.ping(ipfsB.peerId.id))
+      const res = await all(ipfsA.ping(nodeBId.id))
       expect(res.length).to.be.ok()
       expect(res[0].success).to.be.true()
     })

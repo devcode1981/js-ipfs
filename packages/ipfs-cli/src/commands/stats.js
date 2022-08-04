@@ -1,14 +1,22 @@
-'use strict'
+import { commands } from './stats/index.js'
 
-module.exports = {
+/** @type {import('yargs').CommandModule} */
+const command = {
   command: 'stats <command>',
 
-  description: 'Query IPFS statistics.',
+  describe: 'Query IPFS statistics',
 
-  /**
-   * @param {import('yargs').Argv} yargs
-   */
   builder (yargs) {
-    return yargs.commandDir('stats')
+    commands.forEach(command => {
+      yargs.command(command)
+    })
+
+    return yargs
+  },
+
+  handler () {
+
   }
 }
+
+export default command

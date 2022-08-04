@@ -1,32 +1,120 @@
 /* eslint-disable complexity */
-'use strict'
 
-const { promisify } = require('util')
-// @ts-ignore no types
-const getFolderSize = promisify(require('get-folder-size'))
-// @ts-ignore no types
-const byteman = require('byteman')
-const mh = require('multihashing-async').multihash
-const multibase = require('multibase')
-const {
+import getFolderSize from 'get-folder-size'
+// @ts-expect-error no types
+import byteman from 'byteman'
+import {
   createProgressBar,
   coerceMtime,
   coerceMtimeNsecs,
   stripControlCharacters
-} = require('../utils')
-const { cidToString } = require('ipfs-core-utils/src/cid')
-const globSource = require('ipfs-utils/src/files/glob-source')
-const { default: parseDuration } = require('parse-duration')
+} from '../utils.js'
+import globSource from 'ipfs-utils/src/files/glob-source.js'
+import parseDuration from 'parse-duration'
+import merge from 'it-merge'
+import fs from 'fs'
+import path from 'path'
 
 /**
  * @param {string[]} paths
  */
 async function getTotalBytes (paths) {
   const sizes = await Promise.all(paths.map(p => getFolderSize(p)))
-  return sizes.reduce((total, size) => total + size, 0)
+  return sizes.reduce((total, { size }) => total + size, 0)
 }
 
-module.exports = {
+/**
+ * @param {string} target
+ * @param {object} options
+ * @param {boolean} [options.recursive]
+ * @param {boolean} [options.hidden]
+ * @param {boolean} [options.preserveMode]
+ * @param {boolean} [options.preserveMtime]
+ * @param {number} [options.mode]
+ * @param {import('ipfs-unixfs').MtimeLike} [options.mtime]
+ */
+async function * getSource (target, options = {}) {
+  const absolutePath = path.resolve(target)
+  const stats = await fs.promises.stat(absolutePath)
+
+  if (stats.isFile()) {
+    let mtime = options.mtime
+    let mode = options.mode
+
+    if (options.preserveMtime) {
+      mtime = stats.mtime
+    }
+
+    if (options.preserveMode) {
+      mode = stats.mode
+    }
+
+    yield {
+      path: path.basename(target),
+      content: fs.createReadStream(absolutePath),
+      mtime,
+      mode
+    }
+
+    return
+  }
+
+  const dirName = path.basename(absolutePath)
+
+  let pattern = '*'
+
+  if (options.recursive) {
+    pattern = '**/*'
+  }
+
+  for await (const content of globSource(target, pattern, {
+    hidden: options.hidden,
+    preserveMode: options.preserveMode,
+    preserveMtime: options.preserveMtime,
+    mode: options.mode,
+    mtime: options.mtime
+  })) {
+    yield {
+      ...content,
+      path: `${dirName}${content.path}`
+    }
+  }
+}
+
+/**
+ * @typedef {object} Argv
+ * @property {import('../types').Context} Argv.ctx
+ * @property {boolean} Argv.trickle
+ * @property {number} Argv.shardSplitThreshold
+ * @property {import('multiformats/cid').CIDVersion} Argv.cidVersion
+ * @property {boolean} Argv.rawLeaves
+ * @property {boolean} Argv.onlyHash
+ * @property {string} Argv.hash
+ * @property {boolean} Argv.wrapWithDirectory
+ * @property {boolean} Argv.pin
+ * @property {string} Argv.chunker
+ * @property {boolean} Argv.preload
+ * @property {number} Argv.fileImportConcurrency
+ * @property {number} Argv.blockWriteConcurrency
+ * @property {number} Argv.timeout
+ * @property {boolean} Argv.quieter
+ * @property {boolean} Argv.quiet
+ * @property {boolean} Argv.silent
+ * @property {boolean} Argv.progress
+ * @property {string[]} Argv.file
+ * @property {number} Argv.mtime
+ * @property {number} Argv.mtimeNsecs
+ * @property {boolean} Argv.recursive
+ * @property {boolean} Argv.hidden
+ * @property {boolean} Argv.preserveMode
+ * @property {boolean} Argv.preserveMtime
+ * @property {number} Argv.mode
+ * @property {string} Argv.cidBase
+ * @property {boolean} Argv.enableShardingExperiment
+ */
+
+/** @type {import('yargs').CommandModule<Argv, Argv>} */
+const command = {
   command: 'add [file...]',
 
   describe: 'Add a file to IPFS using the UnixFS data format',
@@ -34,35 +122,35 @@ module.exports = {
   builder: {
     progress: {
       alias: 'p',
-      type: 'boolean',
+      boolean: true,
       default: true,
       describe: 'Stream progress data'
     },
     recursive: {
       alias: 'r',
-      type: 'boolean',
+      boolean: true,
       default: false
     },
     trickle: {
       alias: 't',
-      type: 'boolean',
+      boolean: true,
       default: false,
       describe: 'Use the trickle DAG builder'
     },
     'wrap-with-directory': {
       alias: 'w',
-      type: 'boolean',
+      boolean: true,
       default: false,
       describe: 'Add a wrapping node'
     },
     'only-hash': {
       alias: 'n',
-      type: 'boolean',
+      boolean: true,
       default: false,
       describe: 'Only chunk and hash, do not write'
     },
     'block-write-concurrency': {
-      type: 'integer',
+      number: true,
       default: 10,
       describe: 'After a file has been chunked, this controls how many chunks to hash and add to the block store concurrently'
     },
@@ -71,132 +159,100 @@ module.exports = {
       describe: 'Chunking algorithm to use, formatted like [size-{size}, rabin, rabin-{avg}, rabin-{min}-{avg}-{max}]'
     },
     'file-import-concurrency': {
-      type: 'integer',
+      number: true,
       default: 50,
       describe: 'How many files to import at once'
     },
     'enable-sharding-experiment': {
-      type: 'boolean',
+      boolean: true,
       default: false
     },
     'shard-split-threshold': {
-      type: 'integer',
+      number: true,
       default: 1000
     },
     'raw-leaves': {
-      type: 'boolean',
+      boolean: true,
       describe: 'Use raw blocks for leaf nodes. (experimental)'
     },
     'cid-version': {
-      type: 'integer',
+      number: true,
       describe: 'CID version. Defaults to 0 unless an option that depends on CIDv1 is passed. (experimental)',
       default: 0
     },
     'cid-base': {
-      describe: 'Number base to display CIDs in.',
-      type: 'string',
-      choices: Object.keys(multibase.names)
+      describe: 'Number base to display CIDs in',
+      string: true,
+      default: 'base58btc'
     },
     hash: {
-      type: 'string',
-      choices: Object.keys(mh.names),
+      string: true,
       describe: 'Hash function to use. Will set CID version to 1 if used. (experimental)',
       default: 'sha2-256'
     },
     quiet: {
       alias: 'q',
-      type: 'boolean',
+      boolean: true,
       default: false,
       describe: 'Write minimal output'
     },
     quieter: {
       alias: 'Q',
-      type: 'boolean',
+      boolean: true,
       default: false,
       describe: 'Write only final hash'
     },
     silent: {
-      type: 'boolean',
+      boolean: true,
       default: false,
       describe: 'Write no output'
     },
     pin: {
-      type: 'boolean',
+      boolean: true,
       default: true,
       describe: 'Pin this object when adding'
     },
     preload: {
-      type: 'boolean',
+      boolean: true,
       default: true,
       describe: 'Preload this object when adding'
     },
     hidden: {
       alias: 'H',
-      type: 'boolean',
+      boolean: true,
       default: false,
       describe: 'Include files that are hidden. Only takes effect on recursive add.'
     },
     'preserve-mode': {
-      type: 'boolean',
+      boolean: true,
       default: false,
       describe: 'Apply permissions to created UnixFS entries'
     },
     'preserve-mtime': {
-      type: 'boolean',
+      boolean: true,
       default: false,
       describe: 'Apply modification time to created UnixFS entries'
     },
     mode: {
-      type: 'string',
+      string: true,
       describe: 'File mode to apply to created UnixFS entries'
     },
     mtime: {
-      type: 'number',
+      number: true,
       coerce: coerceMtime,
       describe: 'Modification time in seconds before or since the Unix Epoch to apply to created UnixFS entries'
     },
     'mtime-nsecs': {
-      type: 'number',
+      number: true,
       coerce: coerceMtimeNsecs,
       describe: 'Modification time fraction in nanoseconds'
     },
     timeout: {
-      type: 'string',
+      string: true,
       coerce: parseDuration
     }
   },
 
-  /**
-   * @param {object} argv
-   * @param {import('../types').Context} argv.ctx
-   * @param {boolean} argv.trickle
-   * @param {number} argv.shardSplitThreshold
-   * @param {import('cids').CIDVersion} argv.cidVersion
-   * @param {boolean} argv.rawLeaves
-   * @param {boolean} argv.onlyHash
-   * @param {import('multihashes').HashName} argv.hash
-   * @param {boolean} argv.wrapWithDirectory
-   * @param {boolean} argv.pin
-   * @param {string} argv.chunker
-   * @param {boolean} argv.preload
-   * @param {number} argv.fileImportConcurrency
-   * @param {number} argv.blockWriteConcurrency
-   * @param {number} argv.timeout
-   * @param {boolean} argv.quieter
-   * @param {boolean} argv.quiet
-   * @param {boolean} argv.silent
-   * @param {boolean} argv.progress
-   * @param {string[]} argv.file
-   * @param {number} argv.mtime
-   * @param {number} argv.mtimeNsecs
-   * @param {boolean} argv.recursive
-   * @param {boolean} argv.hidden
-   * @param {boolean} argv.preserveMode
-   * @param {boolean} argv.preserveMtime
-   * @param {number} argv.mode
-   * @param {import('multibase').BaseName} argv.cidBase
-   * @param {boolean} argv.enableShardingExperiment
-   */
   async handler ({
     ctx: { ipfs, print, isDaemon, getStdin },
     trickle,
@@ -290,14 +346,14 @@ module.exports = {
     }
 
     const source = file
-      ? globSource(file, {
-        recursive,
+      ? merge(...file.map(file => getSource(file, {
         hidden,
+        recursive,
         preserveMode,
         preserveMtime,
         mode,
         mtime: date
-      })
+      })))
       : [{
           content: getStdin(),
           mode,
@@ -305,6 +361,7 @@ module.exports = {
         }] // Pipe to ipfs.add tagging with mode and mtime
 
     let finalCid
+    const base = await ipfs.bases.getBase(cidBase)
 
     try {
       for await (const { cid, path } of ipfs.addAll(source, options)) {
@@ -318,7 +375,7 @@ module.exports = {
         }
 
         const pathStr = stripControlCharacters(path)
-        const cidStr = cidToString(cid, { base: cidBase })
+        const cidStr = cid.toString(base.encoder)
         let message = cidStr
 
         if (!quiet) {
@@ -328,7 +385,7 @@ module.exports = {
 
         log(message)
       }
-    } catch (err) {
+    } catch (/** @type {any} */ err) {
       // Tweak the error message and add more relevant info for the CLI
       if (err.code === 'ERR_DIR_NON_RECURSIVE') {
         err.message = `'${err.path}' is a directory, use the '-r' flag to specify directories`
@@ -342,7 +399,9 @@ module.exports = {
     }
 
     if (quieter && finalCid) {
-      log(cidToString(finalCid, { base: cidBase }))
+      log(finalCid.toString(base.encoder))
     }
   }
 }
+
+export default command

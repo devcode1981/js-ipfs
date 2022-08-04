@@ -1,12 +1,22 @@
-'use strict'
+import fs from 'fs'
+import concat from 'it-concat'
+import parseDuration from 'parse-duration'
 
-const fs = require('fs')
-const multibase = require('multibase')
-const concat = require('it-concat')
-const { cidToString } = require('ipfs-core-utils/src/cid')
-const { default: parseDuration } = require('parse-duration')
+/**
+ * @typedef {object} Argv
+ * @property {import('../../types').Context} Argv.ctx
+ * @property {string} Argv.block
+ * @property {string} Argv.format
+ * @property {string} Argv.mhtype
+ * @property {number} Argv.mhlen
+ * @property {import('multiformats/cid').CIDVersion} Argv.version
+ * @property {boolean} Argv.pin
+ * @property {string} Argv.cidBase
+ * @property {number} Argv.timeout
+ */
 
-module.exports = {
+/** @type {import('yargs').CommandModule<Argv, Argv>} */
+const command = {
   command: 'put [block]',
 
   describe: 'Stores input as an IPFS block',
@@ -14,7 +24,7 @@ module.exports = {
   builder: {
     format: {
       alias: 'f',
-      describe: 'cid format for blocks to be created with.',
+      describe: 'cid format for blocks to be created with',
       default: 'dag-pb'
     },
     mhtype: {
@@ -27,37 +37,25 @@ module.exports = {
     },
     version: {
       describe: 'cid version',
-      type: 'number',
+      number: true,
       default: 0
     },
     'cid-base': {
-      describe: 'Number base to display CIDs in.',
-      type: 'string',
-      choices: Object.keys(multibase.names)
+      describe: 'Number base to display CIDs in',
+      string: true,
+      default: 'base58btc'
     },
     pin: {
       describe: 'Pin this block recursively',
-      type: 'boolean',
+      boolean: true,
       default: false
     },
     timeout: {
-      type: 'string',
+      string: true,
       coerce: parseDuration
     }
   },
 
-  /**
-   * @param {object} argv
-   * @param {import('../../types').Context} argv.ctx
-   * @param {string} argv.block
-   * @param {import('multicodec').CodecName} argv.format
-   * @param {import('multihashes').HashName} argv.mhtype
-   * @param {number} argv.mhlen
-   * @param {import('cids').CIDVersion} argv.version
-   * @param {boolean} argv.pin
-   * @param {import('multibase').BaseName} argv.cidBase
-   * @param {number} argv.timeout
-   */
   async handler ({ ctx: { ipfs, print, getStdin }, block, timeout, format, mhtype, mhlen, version, cidBase, pin }) {
     let data
 
@@ -67,14 +65,17 @@ module.exports = {
       data = (await concat(getStdin(), { type: 'buffer' })).slice()
     }
 
-    const { cid } = await ipfs.block.put(data, {
+    const cid = await ipfs.block.put(data, {
       timeout,
       format,
       mhtype,
-      mhlen,
       version,
       pin
     })
-    print(cidToString(cid, { base: cidBase }))
+    const base = await ipfs.bases.getBase(cidBase)
+
+    print(cid.toString(base.encoder))
   }
 }
+
+export default command

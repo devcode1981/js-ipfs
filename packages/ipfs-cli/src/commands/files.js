@@ -1,22 +1,22 @@
-'use strict'
+import { commands } from './files/index.js'
 
-module.exports = {
+/** @type {import('yargs').CommandModule} */
+const command = {
   command: 'files <command>',
 
-  description: 'Operations over mfs files (ls, mkdir, rm, etc)',
+  describe: 'Operations over mfs files (ls, mkdir, rm, etc)',
 
-  /**
-   * @param {import('yargs').Argv} yargs
-   */
   builder (yargs) {
-    return yargs.commandDir('files')
+    commands.forEach(command => {
+      yargs.command(command)
+    })
+
+    return yargs
   },
 
-  /**
-   * @param {object} argv
-   * @param {import('../types').Context} argv.ctx
-   */
-  handler (argv) {
-    argv.ctx.print('Type `jsipfs files --help` for more instructions')
+  handler ({ ctx: { print } }) {
+    print('Type `jsipfs files --help` for more instructions')
   }
 }
+
+export default command

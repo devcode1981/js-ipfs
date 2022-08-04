@@ -1,21 +1,19 @@
-'use strict'
-
-const { Multiaddr } = require('multiaddr')
-const configure = require('../lib/configure')
-const toUrlSearchParams = require('../lib/to-url-search-params')
+import { Multiaddr } from '@multiformats/multiaddr'
+import { configure } from '../lib/configure.js'
+import { toUrlSearchParams } from '../lib/to-url-search-params.js'
+import { peerIdFromString } from '@libp2p/peer-id'
 
 /**
  * @typedef {import('../types').HTTPClientExtraOptions} HTTPClientExtraOptions
  * @typedef {import('ipfs-core-types/src/swarm').API<HTTPClientExtraOptions>} SwarmAPI
  */
 
-module.exports = configure(api => {
+export const createPeers = configure(api => {
   /**
    * @type {SwarmAPI["peers"]}
    */
   async function peers (options = {}) {
     const res = await api.post('swarm/peers', {
-      timeout: options.timeout,
       signal: options.signal,
       searchParams: toUrlSearchParams(options),
       headers: options.headers
@@ -27,7 +25,7 @@ module.exports = configure(api => {
     return (Peers || []).map(peer => {
       return {
         addr: new Multiaddr(peer.Addr),
-        peer: peer.Peer,
+        peer: peerIdFromString(peer.Peer),
         muxer: peer.Muxer,
         latency: peer.Latency,
         streams: peer.Streams,

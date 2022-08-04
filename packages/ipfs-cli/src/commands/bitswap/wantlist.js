@@ -1,40 +1,43 @@
-'use strict'
+import parseDuration from 'parse-duration'
+import { coercePeerId } from '../../utils.js'
 
-const multibase = require('multibase')
-const { cidToString } = require('ipfs-core-utils/src/cid')
-const { default: parseDuration } = require('parse-duration')
+/**
+ * @typedef {object} Argv
+ * @property {import('../../types').Context} Argv.ctx
+ * @property {import('@libp2p/interfaces/peer-id').PeerId} Argv.peer
+ * @property {string} Argv.cidBase
+ * @property {number} Argv.timeout
+ */
 
-module.exports = {
+/** @type {import('yargs').CommandModule<Argv, Argv>} */
+const command = {
   command: 'wantlist [peer]',
 
-  describe: 'Print out all blocks currently on the bitswap wantlist for the local peer.',
+  describe: 'Print out all blocks currently on the bitswap wantlist for the local peer',
 
   builder: {
     peer: {
       alias: 'p',
-      describe: 'Specify which peer to show wantlist for.',
-      type: 'string'
+      describe: 'Specify which peer to show wantlist for',
+      string: true,
+      coerce: coercePeerId
     },
     'cid-base': {
-      describe: 'Number base to display CIDs in. Note: specifying a CID base for v0 CIDs will have no effect.',
-      type: 'string',
-      choices: Object.keys(multibase.names)
+      describe: 'Number base to display CIDs in. Note: specifying a CID base for v0 CIDs will have no effect',
+      string: true,
+      default: 'base58btc'
     },
     timeout: {
-      type: 'string',
+      string: true,
       coerce: parseDuration
     }
   },
 
-  /**
-   * @param {object} argv
-   * @param {import('../../types').Context} argv.ctx
-   * @param {string} argv.peer
-   * @param {import('multibase').BaseName} argv.cidBase
-   * @param {number} argv.timeout
-   */
   async handler ({ ctx, peer, cidBase, timeout }) {
     const { ipfs, print } = ctx
+    const base = await ipfs.bases.getBase(cidBase)
+
+    /** @type {import('multiformats/cid').CID[]} */
     let list
 
     if (peer) {
@@ -47,6 +50,8 @@ module.exports = {
       })
     }
 
-    list.forEach(cid => print(cidToString(cid, { base: cidBase, upgrade: false })))
+    list.forEach(cid => print(cid.toString(base.encoder)))
   }
 }
+
+export default command

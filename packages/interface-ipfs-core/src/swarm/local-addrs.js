@@ -1,35 +1,39 @@
 /* eslint-env mocha */
-'use strict'
 
-const { getDescribe, getIt, expect } = require('../utils/mocha')
-const { isWebWorker } = require('ipfs-utils/src/env')
+import { expect } from 'aegir/chai'
+import { getDescribe, getIt } from '../utils/mocha.js'
+import { isWebWorker } from 'ipfs-utils/src/env.js'
 
-/** @typedef { import("ipfsd-ctl/src/factory") } Factory */
 /**
- * @param {Factory} common
- * @param {Object} options
+ * @typedef {import('ipfsd-ctl').Factory} Factory
  */
-module.exports = (common, options) => {
+
+/**
+ * @param {Factory} factory
+ * @param {object} options
+ */
+export function testLocalAddrs (factory, options) {
   const describe = getDescribe(options)
   const it = getIt(options)
 
   describe('.swarm.localAddrs', function () {
     this.timeout(80 * 1000)
 
+    /** @type {import('ipfs-core-types').IPFS} */
     let ipfs
 
     before(async () => {
-      ipfs = (await common.spawn()).api
+      ipfs = (await factory.spawn()).api
     })
 
-    after(() => common.clean())
+    after(() => factory.clean())
 
     it('should list local addresses the node is listening on', async () => {
       const multiaddrs = await ipfs.swarm.localAddrs()
 
       expect(multiaddrs).to.be.an.instanceOf(Array)
 
-      if (isWebWorker && common.opts.type === 'proc') {
+      if (isWebWorker && factory.opts.type === 'proc') {
         expect(multiaddrs).to.have.lengthOf(0)
       } else {
         expect(multiaddrs).to.not.be.empty()

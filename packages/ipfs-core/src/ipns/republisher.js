@@ -1,17 +1,15 @@
-'use strict'
+import * as ipns from 'ipns'
+import { importKey } from '@libp2p/crypto/keys'
+import { isPeerId } from '@libp2p/interfaces/peer-id'
+import errcode from 'err-code'
+import { logger } from '@libp2p/logger'
+import { peerIdFromKeys } from '@libp2p/peer-id'
 
-const ipns = require('ipns')
-const crypto = require('libp2p-crypto')
-const PeerId = require('peer-id')
-const errcode = require('err-code')
-
-const debug = require('debug')
-const log = Object.assign(debug('ipfs:ipns:republisher'), {
-  error: debug('ipfs:ipns:republisher:error')
-})
+const log = logger('ipfs:ipns:republisher')
 
 /**
- * @typedef {import('libp2p-crypto').PrivateKey} PrivateKey
+ * @typedef {import('@libp2p/interfaces/keys').PrivateKey} PrivateKey
+ * @typedef {import('@libp2p/interfaces/peer-id').PeerId} PeerId
  */
 
 const minute = 60 * 1000
@@ -20,12 +18,12 @@ const hour = 60 * minute
 const defaultBroadcastInterval = 4 * hour
 const defaultRecordLifetime = 24 * hour
 
-class IpnsRepublisher {
+export class IpnsRepublisher {
   /**
-   * @param {import('./publisher')} publisher
+   * @param {import('./publisher').IpnsPublisher} publisher
    * @param {import('interface-datastore').Datastore} datastore
    * @param {PeerId} peerId
-   * @param {import('libp2p/src/keychain')} keychain
+   * @param {import('@libp2p/interfaces/keychain').KeyChain} keychain
    * @param {object} options
    * @param {string} options.pass
    * @param {number} [options.initialBroadcastInterval]
@@ -61,7 +59,7 @@ class IpnsRepublisher {
           republishHandle._timeoutId = null
 
           try {
-            // @ts-ignore - _task could be null
+            // @ts-expect-error - _task could be null
             republishHandle._inflightTask = republishHandle._task()
             await republishHandle._inflightTask
 
@@ -69,7 +67,7 @@ class IpnsRepublisher {
             if (republishHandle._task) {
               republishHandle.runPeriodically(period)
             }
-          } catch (err) {
+          } catch (/** @type {any} */ err) {
             log.error(err)
           }
         }, period())
@@ -86,11 +84,10 @@ class IpnsRepublisher {
       }
     }
 
-    const { privKey } = this._peerId
     const { pass } = this._options
     let firstRun = true
 
-    republishHandle._task = () => this._republishEntries(privKey, pass)
+    republishHandle._task = () => this._republishEntries(this._peerId, pass)
 
     republishHandle.runPeriodically(() => {
       if (firstRun) {
@@ -117,15 +114,15 @@ class IpnsRepublisher {
   }
 
   /**
-   * @param {PrivateKey} privateKey
+   * @param {PeerId} peerId
    * @param {string} pass
    */
-  async _republishEntries (privateKey, pass) {
+  async _republishEntries (peerId, pass) {
     // TODO: Should use list of published entries.
     // We can't currently *do* that because go uses this method for now.
     try {
-      await this._republishEntry(privateKey)
-    } catch (err) {
+      await this._republishEntry(peerId)
+    } catch (/** @type {any} */ err) {
       const errMsg = 'cannot republish entry for the node\'s private key'
 
       log.error(errMsg)
@@ -141,30 +138,27 @@ class IpnsRepublisher {
           if (key.name === 'self') {
             continue
           }
-          const pem = await this._keychain.exportKey(key.name, pass)
-          const privKey = await crypto.keys.import(pem, pass)
 
-          await this._republishEntry(privKey)
+          const pem = await this._keychain.exportKey(key.name, pass)
+          const privKey = await importKey(pem, pass)
+          const peerIdKey = await peerIdFromKeys(privKey.public.bytes, privKey.bytes)
+
+          await this._republishEntry(peerIdKey)
         }
-      } catch (err) {
+      } catch (/** @type {any} */ err) {
         log.error(err)
       }
     }
   }
 
   /**
-   * @param {PrivateKey} privateKey
+   * @param {PeerId} peerId
    */
-  async _republishEntry (privateKey) {
-    if (!privateKey || !privateKey.bytes) {
-      throw errcode(new Error('invalid private key'), 'ERR_INVALID_PRIVATE_KEY')
-    }
-
+  async _republishEntry (peerId) {
     try {
-      const peerId = await PeerId.createFromPrivKey(privateKey.bytes)
       const value = await this._getPreviousValue(peerId)
-      await this._publisher.publishWithEOL(privateKey, value, defaultRecordLifetime)
-    } catch (err) {
+      await this._publisher.publishWithEOL(peerId, value, defaultRecordLifetime)
+    } catch (/** @type {any} */ err) {
       if (err.code === 'ERR_NO_ENTRY_FOUND') {
         return
       }
@@ -177,12 +171,12 @@ class IpnsRepublisher {
    * @param {PeerId} peerId
    */
   async _getPreviousValue (peerId) {
-    if (!(PeerId.isPeerId(peerId))) {
+    if (!(isPeerId(peerId))) {
       throw errcode(new Error('invalid peer ID'), 'ERR_INVALID_PEER_ID')
     }
 
     try {
-      const dsVal = await this._datastore.get(ipns.getLocalKey(peerId.id))
+      const dsVal = await this._datastore.get(ipns.getLocalKey(peerId.toBytes()))
 
       if (!(dsVal instanceof Uint8Array)) {
         throw errcode(new Error("found ipns record that we couldn't process"), 'ERR_INVALID_IPNS_RECORD')
@@ -193,20 +187,18 @@ class IpnsRepublisher {
         const record = ipns.unmarshal(dsVal)
 
         return record.value
-      } catch (err) {
+      } catch (/** @type {any} */ err) {
         log.error(err)
         throw errcode(new Error('found ipns record that we couldn\'t convert to a value'), 'ERR_INVALID_IPNS_RECORD')
       }
-    } catch (err) {
+    } catch (/** @type {any} */ err) {
       // error handling
       // no need to republish
       if (err && err.notFound) {
-        throw errcode(new Error(`no previous entry for record with id: ${peerId.id}`), 'ERR_NO_ENTRY_FOUND')
+        throw errcode(new Error(`no previous entry for record with id: ${peerId.toString()}`), 'ERR_NO_ENTRY_FOUND')
       }
 
       throw err
     }
   }
 }
-
-exports = module.exports = IpnsRepublisher

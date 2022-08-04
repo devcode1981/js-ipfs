@@ -1,45 +1,46 @@
-'use strict'
+import parseDuration from 'parse-duration'
+import { coerceCID } from '../../utils.js'
 
-const multibase = require('multibase')
-const { cidToString } = require('ipfs-core-utils/src/cid')
-const { default: parseDuration } = require('parse-duration')
-const { coerceCID } = require('../../utils')
+/**
+ * @typedef {object} Argv
+ * @property {import('../../types').Context} Argv.ctx
+ * @property {import('multiformats/cid').CID} Argv.key
+ * @property {string} Argv.cidBase
+ * @property {number} Argv.timeout
+ */
 
-module.exports = {
+/** @type {import('yargs').CommandModule<Argv, Argv>} */
+const command = {
   command: 'unwant <key>',
 
-  describe: 'Removes a given block from your wantlist.',
+  describe: 'Removes a given block from your wantlist',
 
   builder: {
     key: {
       alias: 'k',
       describe: 'Key to remove from your wantlist',
-      type: 'string',
+      string: true,
       coerce: coerceCID
     },
     'cid-base': {
-      describe: 'Number base to display CIDs in. Note: specifying a CID base for v0 CIDs will have no effect.',
-      type: 'string',
-      choices: Object.keys(multibase.names)
+      describe: 'Number base to display CIDs in. Note: specifying a CID base for v0 CIDs will have no effect',
+      string: true,
+      default: 'base58btc'
     },
     timeout: {
-      type: 'string',
+      string: true,
       coerce: parseDuration
     }
   },
 
-  /**
-   * @param {object} argv
-   * @param {import('../../types').Context} argv.ctx
-   * @param {import('cids')} argv.key
-   * @param {import('multibase').BaseName} argv.cidBase
-   * @param {number} argv.timeout
-   */
   async handler ({ ctx, key, cidBase, timeout }) {
     const { ipfs, print } = ctx
+    const base = await ipfs.bases.getBase(cidBase)
     await ipfs.bitswap.unwant(key, {
       timeout
     })
-    print(`Key ${cidToString(key, { base: cidBase, upgrade: false })} removed from wantlist`)
+    print(`Key ${key.toString(base.encoder)} removed from wantlist`)
   }
 }
+
+export default command

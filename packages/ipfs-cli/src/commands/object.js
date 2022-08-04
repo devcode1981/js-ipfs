@@ -1,15 +1,22 @@
-'use strict'
+import { commands } from './object/index.js'
 
-module.exports = {
+/** @type {import('yargs').CommandModule} */
+const command = {
   command: 'object <command>',
 
-  description: 'Interact with ipfs objects.',
+  describe: 'Interact with ipfs objects',
 
-  /**
-   * @param {import('yargs').Argv} yargs
-   */
   builder (yargs) {
+    commands.forEach(command => {
+      yargs.command(command)
+    })
+
     return yargs
-      .commandDir('object')
+  },
+
+  handler () {
+
   }
 }
+
+export default command

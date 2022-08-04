@@ -1,13 +1,11 @@
 /* eslint-env mocha */
-'use strict'
 
-const { expect } = require('aegir/utils/chai')
-const testHttpMethod = require('../utils/test-http-method')
-const http = require('../utils/http')
-const sinon = require('sinon')
-const allNdjson = require('../utils/all-ndjson')
-const { AbortSignal } = require('native-abort-controller')
-const CID = require('cids')
+import { expect } from 'aegir/chai'
+import { testHttpMethod } from '../utils/test-http-method.js'
+import { http } from '../utils/http.js'
+import sinon from 'sinon'
+import { allNdjson } from '../utils/all-ndjson.js'
+import { peerIdFromString } from '@libp2p/peer-id'
 
 describe('/stats', () => {
   let ipfs
@@ -67,11 +65,11 @@ describe('/stats', () => {
     })
 
     it('should return bandwith stats for a peer', async () => {
-      const peer = 'QmfGBRT6BbWJd7yUc2uYdaUZJBbnEFvTqehPFoSMQ6wgdr'
+      const peer = peerIdFromString('QmfGBRT6BbWJd7yUc2uYdaUZJBbnEFvTqehPFoSMQ6wgdr')
 
       ipfs.stats.bw.withArgs({
         ...defaultOptions,
-        peer: new CID(peer)
+        peer: peer
       }).returns([{
         totalIn: 'totalIn1',
         totalOut: 'totalOut1',
@@ -81,7 +79,7 @@ describe('/stats', () => {
 
       const res = await http({
         method: 'POST',
-        url: `/api/v0/stats/bw?peer=${peer}`
+        url: `/api/v0/stats/bw?peer=${peer.toString()}`
       }, { ipfs })
 
       expect(res).to.have.property('statusCode', 200)

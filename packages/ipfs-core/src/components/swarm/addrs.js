@@ -1,25 +1,29 @@
-'use strict'
-
-const withTimeoutOption = require('ipfs-core-utils/src/with-timeout-option')
+import { withTimeoutOption } from 'ipfs-core-utils/with-timeout-option'
 
 /**
- * @param {Object} config
+ * @typedef {import('ipfs-core-types/src/swarm').AddrsResult} AddrsResult
+ */
+
+/**
+ * @param {object} config
  * @param {import('../../types').NetworkService} config.network
  */
-module.exports = ({ network }) => {
+export function createAddrs ({ network }) {
   /**
-   * @type {import('ipfs-core-types/src/swarm').API["addrs"]}
+   * @type {import('ipfs-core-types/src/swarm').API<{}>["addrs"]}
    */
   async function addrs (options = {}) { // eslint-disable-line require-await
+    /** @type {AddrsResult[]} */
     const peers = []
     const { libp2p } = await network.use(options)
-    for (const [peerId, peer] of libp2p.peerStore.peers.entries()) {
+
+    await libp2p.peerStore.forEach(peer => {
       peers.push({
-        id: peerId,
-        // @ts-ignore - libp2p types are missing
+        id: peer.id,
         addrs: peer.addresses.map((mi) => mi.multiaddr)
       })
-    }
+    })
+
     return peers
   }
 

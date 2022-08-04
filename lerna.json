@@ -1,9 +1,8 @@
 {
-  "lerna": "3.22.0",
+  "version": "independent",
   "packages": [
     "packages/*"
   ],
-  "version": "independent",
   "command": {
     "bootstrap": {
       "hoist": true
@@ -18,7 +17,9 @@
       "verifyAccess": false
     },
     "version": {
-      "private": false
+      "allowBranch": ["master", "release/*"],
+      "forcePublish": true,
+      "ignore-changes": [".github/**", "docs/**"]
     }
   }
 }

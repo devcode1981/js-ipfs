@@ -1,24 +1,24 @@
-'use strict'
+import parseDuration from 'parse-duration'
 
-const { default: parseDuration } = require('parse-duration')
+/**
+ * @typedef {object} Argv
+ * @property {import('../../../types').Context} Argv.ctx
+ * @property {number} Argv.timeout
+ */
 
-module.exports = {
+/** @type {import('yargs').CommandModule<Argv, Argv>} */
+const command = {
   command: 'local',
 
   describe: 'List local addresses',
 
   builder: {
     timeout: {
-      type: 'string',
+      string: true,
       coerce: parseDuration
     }
   },
 
-  /**
-   * @param {object} argv
-   * @param {import('../../../types').Context} argv.ctx
-   * @param {number} argv.timeout
-   */
   async handler ({ ctx: { print, ipfs, isDaemon }, timeout }) {
     if (!isDaemon) {
       throw new Error('This command must be run in online mode. Try running \'ipfs daemon\' first.')
@@ -29,3 +29,5 @@ module.exports = {
     res.forEach(addr => print(addr.toString()))
   }
 }
+
+export default command

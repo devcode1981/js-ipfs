@@ -1,25 +1,18 @@
-'use strict'
-
-const collect = require('it-all')
-const { encodeError } = require('ipfs-message-port-protocol/src/error')
-const { decodeCID, encodeCID } = require('ipfs-message-port-protocol/src/cid')
-const {
-  decodeBlock,
-  encodeBlock
-} = require('ipfs-message-port-protocol/src/block')
+import all from 'it-all'
+import { encodeError } from 'ipfs-message-port-protocol/error'
+import { decodeCID, encodeCID } from 'ipfs-message-port-protocol/cid'
+import { encodeBlock } from 'ipfs-message-port-protocol/block'
 
 /**
  * @typedef {import('ipfs-core-types').IPFS} IPFS
- * @typedef {import('cids')} CID
- * @typedef {import('ipfs-message-port-protocol/src/error').EncodedError} EncodedError
- * @typedef {import('ipfs-message-port-protocol/src/block').Block} Block
- * @typedef {import('ipfs-message-port-protocol/src/cid').EncodedCID} EncodedCID
- * @typedef {import('ipfs-message-port-protocol/src/block').EncodedBlock} EncodedBlock
- * @typedef {import('ipfs-message-port-protocol/src/block').EncodedRmResult} EncodedRmResult
+ * @typedef {import('multiformats/cid').CID} CID
+ * @typedef {import('ipfs-message-port-protocol/error').EncodedError} EncodedError
+ * @typedef {import('ipfs-message-port-protocol/cid').EncodedCID} EncodedCID
+ * @typedef {import('ipfs-message-port-protocol/block').EncodedRmResult} EncodedRmResult
  * @typedef {import('ipfs-core-types/src/block').PutOptions} PutOptions
  */
 
-exports.BlockService = class BlockService {
+export class BlockService {
   /**
    * @param {IPFS} ipfs
    */
@@ -28,11 +21,11 @@ exports.BlockService = class BlockService {
   }
 
   /**
-   * @typedef {Object} GetResult
-   * @property {EncodedBlock} block
-   * @property {Transferable[]} transfer
+   * @typedef {object} GetResult
+   * @property {Uint8Array} block
+   * @property {Set<Transferable>} transfer
    *
-   * @typedef {Object} GetQuery
+   * @typedef {object} GetQuery
    * @property {EncodedCID} cid
    * @property {number} [timeout]
    * @property {AbortSignal} [query.signal]
@@ -43,18 +36,18 @@ exports.BlockService = class BlockService {
   async get (query) {
     const cid = decodeCID(query.cid)
     const block = await this.ipfs.block.get(cid, query)
-    /** @type {Transferable[]} */
-    const transfer = []
+    /** @type {Set<Transferable>} */
+    const transfer = new Set()
     return { transfer, block: encodeBlock(block, transfer) }
   }
 
   /**
-   * @typedef {Object} PutResult
-   * @property {EncodedBlock} block
-   * @property {Transferable[]} transfer
+   * @typedef {object} PutResult
+   * @property {EncodedCID} cid
+   * @property {Set<Transferable>} transfer
    *
-   * @typedef {Object} PutQuery
-   * @property {EncodedBlock|Uint8Array} block
+   * @typedef {object} PutQuery
+   * @property {Uint8Array} block
    * @property {EncodedCID|undefined} [cid]
    *
    * Stores input as an IPFS block.
@@ -64,28 +57,15 @@ exports.BlockService = class BlockService {
    */
   async put (query) {
     const input = query.block
-    let result
-    /** @type {Uint8Array|Block} */
-    if (input instanceof Uint8Array) {
-      result = await this.ipfs.block.put(input, {
-        ...query,
-        cid: query.cid ? decodeCID(query.cid) : query.cid
-      })
-    } else {
-      const block = decodeBlock(input)
-      result = await this.ipfs.block.put(block, {
-        ...query,
-        cid: undefined
-      })
-    }
+    const result = await this.ipfs.block.put(input, query)
+    /** @type {Set<Transferable>} */
+    const transfer = new Set()
 
-    /** @type {Transferable[]} */
-    const transfer = []
-    return { transfer, block: encodeBlock(result, transfer) }
+    return { transfer, cid: encodeCID(result, transfer) }
   }
 
   /**
-   * @typedef {Object} RmQuery
+   * @typedef {object} RmQuery
    * @property {EncodedCID[]} cids
    * @property {boolean} [force]
    * @property {boolean} [quiet]
@@ -97,9 +77,9 @@ exports.BlockService = class BlockService {
    * @returns {Promise<EncodedRmResult[]>}
    */
   async rm (query) {
-    /** @type {Transferable[]} */
-    const transfer = []
-    const result = await collect(
+    /** @type {Set<Transferable>} */
+    const transfer = new Set()
+    const result = await all(
       this.ipfs.block.rm(query.cids.map(decodeCID), query)
     )
 
@@ -107,12 +87,12 @@ exports.BlockService = class BlockService {
   }
 
   /**
-   * @typedef {Object} StatQuery
+   * @typedef {object} StatQuery
    * @property {EncodedCID} cid
    * @property {number} [timeout]
    * @property {AbortSignal} [signal]
    *
-   * @typedef {Object} EncodedStatResult
+   * @typedef {object} EncodedStatResult
    * @property {EncodedCID} cid
    * @property {number} size
    *
@@ -129,10 +109,10 @@ exports.BlockService = class BlockService {
 }
 
 /**
- * @param {Object} entry
+ * @param {object} entry
  * @param {CID} entry.cid
  * @param {Error|void} [entry.error]
- * @param {Transferable[]} transfer
+ * @param {Set<Transferable>} transfer
  */
 const encodeRmEntry = (entry, transfer) => {
   const cid = encodeCID(entry.cid, transfer)

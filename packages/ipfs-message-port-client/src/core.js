@@ -1,22 +1,22 @@
-'use strict'
 
 /* eslint-env browser */
 
-const Client = require('./client')
-const CID = require('cids')
-const { encodeCID, decodeCID } = require('ipfs-message-port-protocol/src/cid')
-const {
+import { Client } from './client.js'
+import { CID } from 'multiformats/cid'
+import { encodeCID, decodeCID } from 'ipfs-message-port-protocol/cid'
+import {
   decodeIterable,
   encodeIterable,
   encodeCallback
-} = require('ipfs-message-port-protocol/src/core')
+} from 'ipfs-message-port-protocol/core'
 /** @type {<T>(stream:ReadableStream<T>) => AsyncIterable<T>} */
-// @ts-ignore - browser-stream-to-it has no types
-const iterateReadableStream = require('browser-readablestream-to-it')
-const {
+import iterateReadableStream from 'browser-readablestream-to-it'
+import {
   parseMode,
   parseMtime
-} = require('ipfs-unixfs')
+} from 'ipfs-unixfs'
+import itPeekable from 'it-peekable'
+import errCode from 'err-code'
 
 /**
  * @template T
@@ -50,7 +50,7 @@ const {
  * @class
  * @extends {Client<CoreService>}
  */
-class CoreClient extends Client {
+export class CoreClient extends Client {
   /**
    * @param {MessageTransport} transport
    */
@@ -70,7 +70,7 @@ class CoreClient extends Client {
  */
 CoreClient.prototype.addAll = async function * addAll (input, options = {}) {
   const { timeout, signal } = options
-  const transfer = [...(options.transfer || [])]
+  const transfer = options.transfer || new Set()
   const progressCallback = options.progress
     ? encodeCallback(options.progress, transfer)
     : undefined
@@ -98,14 +98,14 @@ CoreClient.prototype.addAll = async function * addAll (input, options = {}) {
  */
 CoreClient.prototype.add = async function add (input, options = {}) {
   const { timeout, signal } = options
-  const transfer = [...(options.transfer || [])]
+  const transfer = options.transfer || new Set()
   const progressCallback = options.progress
     ? encodeCallback(options.progress, transfer)
     : undefined
 
   const result = await this.remote.add({
     ...options,
-    input: encodeAddInput(input, transfer),
+    input: await encodeAddInput(input, transfer),
     progress: undefined,
     progressCallback,
     transfer,
@@ -122,7 +122,8 @@ CoreClient.prototype.add = async function add (input, options = {}) {
  * @type {RootAPI["cat"]}
  */
 CoreClient.prototype.cat = async function * cat (inputPath, options = {}) {
-  const input = CID.isCID(inputPath) ? encodeCID(inputPath) : inputPath
+  const cid = CID.asCID(inputPath)
+  const input = cid ? encodeCID(cid) : inputPath
   const result = await this.remote.cat({ ...options, path: input })
   yield * decodeIterable(result.data, identity)
 }
@@ -133,7 +134,8 @@ CoreClient.prototype.cat = async function * cat (inputPath, options = {}) {
  * @type {RootAPI["ls"]}
  */
 CoreClient.prototype.ls = async function * ls (inputPath, options = {}) {
-  const input = CID.isCID(inputPath) ? encodeCID(inputPath) : inputPath
+  const cid = CID.asCID(inputPath)
+  const input = cid ? encodeCID(cid) : inputPath
   const result = await this.remote.ls({ ...options, path: input })
 
   yield * decodeIterable(result.data, decodeLsEntry)
@@ -159,15 +161,14 @@ const decodeAddedData = ({ path, cid, mode, mtime, size }) => {
  * @param {EncodedIPFSEntry} encodedEntry
  * @returns {import('ipfs-core-types/src/root').IPFSEntry}
  */
-const decodeLsEntry = ({ depth, name, path, size, cid, type, mode, mtime }) => ({
+const decodeLsEntry = ({ name, path, size, cid, type, mode, mtime }) => ({
   cid: decodeCID(cid),
   type,
   name,
   path,
   mode,
   mtime,
-  size,
-  depth
+  size
 })
 
 /**
@@ -182,10 +183,10 @@ const identity = (v) => v
  * given input.
  *
  * @param {ImportCandidate} input
- * @param {Transferable[]} transfer
- * @returns {EncodedAddInput}
+ * @param {Set<Transferable>} transfer
+ * @returns {Promise<EncodedAddInput>}
  */
-const encodeAddInput = (input, transfer) => {
+const encodeAddInput = async (input, transfer) => {
   // We want to get a Blob as input. If we got it we're set.
   if (input instanceof Blob) {
     return input
@@ -201,13 +202,17 @@ const encodeAddInput = (input, transfer) => {
     // be encoded via own specific encoder.
     const iterable = asIterable(input)
     if (iterable) {
-      return encodeIterable(iterable, encodeIterableContent, transfer)
+      return encodeIterable(
+        await ensureIsByteStream(iterable),
+        encodeIterableContent,
+        transfer
+      )
     }
 
     const asyncIterable = asAsyncIterable(input)
     if (asyncIterable) {
       return encodeIterable(
-        asyncIterable,
+        await ensureIsByteStream(asyncIterable),
         encodeAsyncIterableContent,
         transfer
       )
@@ -216,7 +221,7 @@ const encodeAddInput = (input, transfer) => {
     const readableStream = asReadableStream(input)
     if (readableStream) {
       return encodeIterable(
-        iterateReadableStream(readableStream),
+        await ensureIsByteStream(iterateReadableStream(readableStream)),
         encodeAsyncIterableContent,
         transfer
       )
@@ -232,11 +237,11 @@ const encodeAddInput = (input, transfer) => {
 }
 
 /**
- * Encodes input passed to the `ipfs.add` via the best possible strategy for the
+ * Encodes input passed to the `ipfs.addAll` via the best possible strategy for the
  * given input.
  *
  * @param {ImportCandidateStream} input
- * @param {Transferable[]} transfer
+ * @param {Set<Transferable>} transfer
  * @returns {EncodedAddAllInput}
  */
 const encodeAddAllInput = (input, transfer) => {
@@ -273,7 +278,7 @@ const encodeAddAllInput = (input, transfer) => {
  * effective strategy.
  *
  * @param {ImportCandidate} content
- * @param {Transferable[]} transfer
+ * @param {Set<Transferable>} transfer
  * @returns {EncodedAddInput}
  */
 const encodeAsyncIterableContent = (content, transfer) => {
@@ -297,7 +302,7 @@ const encodeAsyncIterableContent = (content, transfer) => {
 
 /**
  * @param {ImportCandidate} content
- * @param {Transferable[]} transfer
+ * @param {Set<Transferable>} transfer
  * @returns {EncodedAddInput}
  */
 const encodeIterableContent = (content, transfer) => {
@@ -323,7 +328,7 @@ const encodeIterableContent = (content, transfer) => {
 
 /**
  * @param {ToFile | ToDirectory} file
- * @param {Transferable[]} transfer
+ * @param {Set<Transferable>} transfer
  * @returns {EncodedFileInput | EncodedDirectoryInput}
  */
 const encodeFileObject = ({ path, mode, mtime, content }, transfer) => {
@@ -343,7 +348,7 @@ const encodeFileObject = ({ path, mode, mtime, content }, transfer) => {
 
 /**
  * @param {ToContent|undefined} content
- * @param {Transferable[]} transfer
+ * @param {Set<Transferable>} transfer
  * @returns {EncodedFileContent}
  */
 const encodeFileContent = (content, transfer) => {
@@ -449,4 +454,38 @@ const asFileObject = (input) => {
   }
 }
 
-module.exports = CoreClient
+/**
+ * @template T
+ * @param {AsyncIterable<T> | Iterable<T>} input
+ * @returns {Promise<AsyncIterable<T> | Iterable<T>>}
+ */
+const ensureIsByteStream = async (input) => {
+  const peekable = itPeekable(input)
+
+  /** @type {any} value **/
+  const { value, done } = await peekable.peek()
+
+  if (done) {
+    // make sure empty iterators result in empty files
+    return []
+  }
+
+  peekable.push(value)
+
+  // (Async)Iterable<Number>
+  // (Async)Iterable<Bytes>
+  // (Async)Iterable<String>
+  if (Number.isInteger(value) || isBytes(value) || typeof value === 'string' || value instanceof String) {
+    return peekable
+  }
+
+  throw errCode(new Error('Unexpected input: multiple items passed - if you are using ipfs.add, please use ipfs.addAll instead'), 'ERR_UNEXPECTED_INPUT')
+}
+
+/**
+ * @param {any} obj
+ * @returns {obj is ArrayBufferView|ArrayBuffer}
+ */
+function isBytes (obj) {
+  return ArrayBuffer.isView(obj) || obj instanceof ArrayBuffer
+}

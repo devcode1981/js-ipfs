@@ -1,17 +1,16 @@
-'use strict'
+import { WebSockets } from '@libp2p/websockets'
+import { all } from '@libp2p/websockets/filters'
 
-const WS = require('libp2p-websockets')
-const filters = require('libp2p-websockets/src/filters')
-const transportKey = WS.prototype[Symbol.toStringTag]
-
-module.exports = () => ({
-  libp2p: {
-    config: {
-      transport: {
-        [transportKey]: {
-          filter: filters.all
-        }
+export function ipfsOptionsWebsocketsFilterAll () {
+  return {
+    libp2p: {
+      config: {
+        transports: [
+          new WebSockets({
+            filter: all
+          })
+        ]
       }
     }
   }
-})
+}

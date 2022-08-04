@@ -1,22 +1,65 @@
-'use strict'
+import Joi from '../../utils/joi.js'
+import { streamResponse } from '../../utils/stream-response.js'
+import { TimeoutController } from 'timeout-abort-controller'
+import { anySignal } from 'any-signal'
+import { toString as uint8ArrayToString } from 'uint8arrays/to-string'
+import { multipartRequestParser } from '../../utils/multipart-request-parser.js'
+import all from 'it-all'
+import Boom from '@hapi/boom'
 
-const Joi = require('../../utils/joi')
-const Boom = require('@hapi/boom')
-const { pipe } = require('it-pipe')
-// @ts-ignore no types
-const ndjson = require('iterable-ndjson')
-// @ts-ignore no types
-const toStream = require('it-to-stream')
-const { map } = require('streaming-iterables')
-const { PassThrough } = require('stream')
-// @ts-ignore no types
-const toIterable = require('stream-to-it')
-const debug = require('debug')
-const log = Object.assign(debug('ipfs:http-api:dht'), {
-  error: debug('ipfs:http-api:dht:error')
-})
+/**
+ * @typedef {import('ipfs-core-types/src/dht').QueryEvent} QueryEvent
+ * @typedef {import('@libp2p/interfaces/peer-id').PeerId} PeerId
+ */
 
-exports.findPeer = {
+/**
+ * @param {QueryEvent} event
+ */
+function mapQueryEvent (event) {
+  let id
+  let extra = ''
+  const type = event.type
+  let responses = null
+
+  if (event.name === 'PEER_RESPONSE') {
+    id = event.from.toString()
+    responses = event.closer.map(peerData => ({
+      ID: peerData.id,
+      Addrs: peerData.multiaddrs
+    }))
+  } else if (event.name === 'QUERY_ERROR') {
+    extra = event.error.message
+  } else if (event.name === 'PROVIDER') {
+    responses = event.providers.map(peerData => ({
+      ID: peerData.id,
+      Addrs: peerData.multiaddrs
+    }))
+  } else if (event.name === 'VALUE') {
+    extra = uint8ArrayToString(event.value, 'base64pad')
+  } else if (event.name === 'ADDING_PEER') {
+    responses = [{
+      ID: event.peer,
+      Addrs: []
+    }]
+  } else if (event.name === 'DIALING_PEER') {
+    id = event.peer.toString()
+  } else if (event.name === 'FINAL_PEER') {
+    id = event.peer.id.toString()
+    responses = [{
+      ID: event.peer.id,
+      Addrs: event.peer.multiaddrs
+    }]
+  }
+
+  return {
+    Extra: extra,
+    ID: id,
+    Type: type,
+    Responses: responses
+  }
+}
+
+export const findPeerResource = {
   options: {
     validate: {
       options: {
@@ -24,7 +67,7 @@ exports.findPeer = {
         stripUnknown: true
       },
       query: Joi.object().keys({
-        peerId: Joi.cid().required(),
+        peerId: Joi.peerId().required(),
         timeout: Joi.timeout()
       })
         .rename('arg', 'peerId', {
@@ -54,32 +97,32 @@ exports.findPeer = {
       }
     } = request
 
-    let res
+    const signals = [signal]
+    /** @type {TimeoutController | undefined} */
+    let timeoutController
 
-    try {
-      res = await ipfs.dht.findPeer(peerId, {
-        signal,
-        timeout
-      })
-    } catch (err) {
-      if (err.code === 'ERR_LOOKUP_FAILED') {
-        throw Boom.notFound(err.toString())
-      } else {
-        throw Boom.boomify(err, { message: err.toString() })
-      }
+    if (timeout != null) {
+      timeoutController = new TimeoutController(timeout)
+      signals.push(timeoutController.signal)
     }
 
-    return h.response({
-      Responses: [{
-        ID: res.id.toString(),
-        Addrs: (res.addrs || []).map(a => a.toString())
-      }],
-      Type: 2
+    return streamResponse(request, h, () => {
+      return (async function * () {
+        for await (const event of ipfs.dht.findPeer(peerId, {
+          signal: anySignal(signals)
+        })) {
+          yield mapQueryEvent(event)
+        }
+
+        if (timeoutController) {
+          timeoutController.clear()
+        }
+      }())
     })
   }
 }
 
-exports.findProvs = {
+export const findProvsResource = {
   options: {
     validate: {
       options: {
@@ -106,7 +149,7 @@ exports.findProvs = {
    * @param {import('../../types').Request} request
    * @param {import('@hapi/hapi').ResponseToolkit} h
    */
-  handler (request, h) {
+  async handler (request, h) {
     const {
       app: {
         signal
@@ -123,55 +166,44 @@ exports.findProvs = {
       }
     } = request
 
-    let providersFound = false
-    const output = new PassThrough()
+    const signals = [signal]
+    /** @type {TimeoutController | undefined} */
+    let timeoutController
 
-    pipe(
-      ipfs.dht.findProvs(cid, {
-        numProviders,
-        signal,
-        timeout
-      }),
-      map(({ id, addrs }) => {
-        providersFound = true
+    if (timeout != null) {
+      timeoutController = new TimeoutController(timeout)
+      signals.push(timeoutController.signal)
+    }
 
-        return {
-          Responses: [{
-            ID: id.toString(),
-            Addrs: (addrs || []).map((/** @type {import('multiaddr').Multiaddr} */ a) => a.toString())
-          }],
-          Type: 4
+    const providers = new Set()
+
+    return streamResponse(request, h, () => {
+      return (async function * () {
+        for await (const event of ipfs.dht.findProvs(cid, {
+          signal: anySignal(signals)
+        })) {
+          if (event.name === 'PROVIDER') {
+            event.providers.forEach(peerData => {
+              providers.add(peerData.id)
+            })
+          }
+
+          yield mapQueryEvent(event)
+
+          if (providers.size >= numProviders) {
+            break
+          }
         }
-      }),
-      ndjson.stringify,
-      toIterable.sink(output)
-    )
-      .catch((/** @type {Error} */ err) => {
-        log.error(err)
 
-        if (!providersFound && output.writable) {
-          output.write(' ')
+        if (timeoutController) {
+          timeoutController.clear()
         }
-
-        request.raw.res.addTrailers({
-          'X-Stream-Error': JSON.stringify({
-            Message: err.message,
-            Code: 0
-          })
-        })
-      })
-      .finally(() => {
-        output.end()
-      })
-
-    return h.response(output)
-      .header('x-chunked-output', '1')
-      .header('content-type', 'application/json')
-      .header('Trailer', 'X-Stream-Error')
+      }())
+    })
   }
 }
 
-exports.get = {
+export const getResource = {
   options: {
     validate: {
       options: {
@@ -179,10 +211,10 @@ exports.get = {
         stripUnknown: true
       },
       query: Joi.object().keys({
-        buffer: Joi.binary().required(),
+        key: Joi.string().required(),
         timeout: Joi.timeout()
       })
-        .rename('arg', 'buffer', {
+        .rename('arg', 'key', {
           override: true,
           ignoreUndefined: true
         })
@@ -204,24 +236,37 @@ exports.get = {
         }
       },
       query: {
-        buffer,
+        key,
         timeout
       }
     } = request
 
-    const res = await ipfs.dht.get(buffer, {
-      signal,
-      timeout
-    })
+    const signals = [signal]
+    /** @type {TimeoutController | undefined} */
+    let timeoutController
 
-    return h.response({
-      Extra: res.toString(),
-      Type: 5
+    if (timeout != null) {
+      timeoutController = new TimeoutController(timeout)
+      signals.push(timeoutController.signal)
+    }
+
+    return streamResponse(request, h, () => {
+      return (async function * () {
+        for await (const event of ipfs.dht.get(key, {
+          signal: anySignal(signals)
+        })) {
+          yield mapQueryEvent(event)
+        }
+
+        if (timeoutController) {
+          timeoutController.clear()
+        }
+      }())
     })
   }
 }
 
-exports.provide = {
+export const provideResource = {
   options: {
     validate: {
       options: {
@@ -259,16 +304,136 @@ exports.provide = {
       }
     } = request
 
-    await ipfs.dht.provide(cid, {
-      signal,
-      timeout
-    })
+    const signals = [signal]
+    /** @type {TimeoutController | undefined} */
+    let timeoutController
 
-    return h.response()
+    if (timeout != null) {
+      timeoutController = new TimeoutController(timeout)
+      signals.push(timeoutController.signal)
+    }
+
+    return streamResponse(request, h, () => {
+      return (async function * () {
+        for await (const event of ipfs.dht.provide(cid, {
+          signal: anySignal(signals)
+        })) {
+          yield mapQueryEvent(event)
+        }
+
+        if (timeoutController) {
+          timeoutController.clear()
+        }
+      }())
+    })
   }
 }
 
-exports.put = {
+export const putResource = {
+  options: {
+    payload: {
+      parse: false,
+      output: 'stream'
+    },
+    pre: [{
+      assign: 'args',
+      /**
+       * @param {import('../../types').Request} request
+       * @param {import('@hapi/hapi').ResponseToolkit} _h
+       */
+      method: async (request, _h) => {
+        if (!request.payload) {
+          throw Boom.badRequest("Argument 'file' is required")
+        }
+
+        let value
+
+        for await (const part of multipartRequestParser(request.raw.req)) {
+          if (part.type !== 'file') {
+            continue
+          }
+
+          value = Buffer.concat(await all(part.content))
+        }
+
+        if (!value) {
+          throw Boom.badRequest("Argument 'file' is required")
+        }
+
+        try {
+          return { value }
+        } catch (/** @type {any} */ err) {
+          throw Boom.boomify(err, { message: 'Failed to decode file as config' })
+        }
+      }
+    }],
+    validate: {
+      options: {
+        allowUnknown: true,
+        stripUnknown: true
+      },
+      query: Joi.object().keys({
+        key: Joi.string().required(),
+        timeout: Joi.timeout()
+      })
+        .rename('arg', 'key', {
+          override: true,
+          ignoreUndefined: true
+        })
+    }
+  },
+
+  /**
+   * @param {import('../../types').Request} request
+   * @param {import('@hapi/hapi').ResponseToolkit} h
+   */
+  async handler (request, h) {
+    const {
+      app: {
+        signal
+      },
+      server: {
+        app: {
+          ipfs
+        }
+      },
+      pre: {
+        args: {
+          value
+        }
+      },
+      query: {
+        key,
+        timeout
+      }
+    } = request
+
+    const signals = [signal]
+    /** @type {TimeoutController | undefined} */
+    let timeoutController
+
+    if (timeout != null) {
+      timeoutController = new TimeoutController(timeout)
+      signals.push(timeoutController.signal)
+    }
+
+    return streamResponse(request, h, () => {
+      return (async function * () {
+        for await (const event of ipfs.dht.put(key, value, {
+          signal: anySignal(signals)
+        })) {
+          yield mapQueryEvent(event)
+        }
+
+        if (timeoutController) {
+          timeoutController.clear()
+        }
+      }())
+    })
+  }
+}
+
+export const queryResource = {
   options: {
     validate: {
       options: {
@@ -276,9 +441,13 @@ exports.put = {
         stripUnknown: true
       },
       query: Joi.object().keys({
-        arg: Joi.array().length(2).items(Joi.binary()).required(),
+        key: Joi.string().required(),
         timeout: Joi.timeout()
       })
+        .rename('arg', 'key', {
+          override: true,
+          ignoreUndefined: true
+        })
     }
   },
 
@@ -297,72 +466,32 @@ exports.put = {
         }
       },
       query: {
-        arg: [
-          key,
-          value
-        ],
+        key,
         timeout
       }
     } = request
 
-    await ipfs.dht.put(key, value, {
-      signal,
-      timeout
-    })
+    const signals = [signal]
+    /** @type {TimeoutController | undefined} */
+    let timeoutController
 
-    return h.response()
-  }
-}
-
-exports.query = {
-  options: {
-    validate: {
-      options: {
-        allowUnknown: true,
-        stripUnknown: true
-      },
-      query: Joi.object().keys({
-        peerId: Joi.cid().required(),
-        timeout: Joi.timeout()
-      })
-        .rename('arg', 'peerId', {
-          override: true,
-          ignoreUndefined: true
-        })
+    if (timeout != null) {
+      timeoutController = new TimeoutController(timeout)
+      signals.push(timeoutController.signal)
     }
-  },
 
-  /**
-   * @param {import('../../types').Request} request
-   * @param {import('@hapi/hapi').ResponseToolkit} h
-   */
-  handler (request, h) {
-    const {
-      app: {
-        signal
-      },
-      server: {
-        app: {
-          ipfs
+    return streamResponse(request, h, () => {
+      return (async function * () {
+        for await (const event of ipfs.dht.query(key, {
+          signal: anySignal(signals)
+        })) {
+          yield mapQueryEvent(event)
         }
-      },
-      query: {
-        peerId,
-        timeout
-      }
-    } = request
 
-    const response = toStream.readable(
-      pipe(
-        ipfs.dht.query(peerId, {
-          signal,
-          timeout
-        }),
-        map(({ id }) => ({ ID: id.toString() })),
-        ndjson.stringify
-      )
-    )
-
-    return h.response(response)
+        if (timeoutController) {
+          timeoutController.clear()
+        }
+      }())
+    })
   }
 }

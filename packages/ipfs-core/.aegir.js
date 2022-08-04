@@ -1,8 +1,8 @@
-'use strict'
+import { createServer } from 'ipfsd-ctl'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
-const { createServer } = require('ipfsd-ctl')
-const MockPreloadNode = require('./test/utils/mock-preload-node')
-const path = require('path')
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 /** @type {import('aegir').Options["build"]["config"]} */
 const esbuild = {
@@ -20,7 +20,7 @@ const esbuild = {
 }
 
 /** @type {import('aegir').PartialOptions} */
-module.exports = {
+export default {
   test: {
     browser: {
       config: {
@@ -29,6 +29,7 @@ module.exports = {
       }
     },
     async before (options) {
+      const MockPreloadNode = await import('./test/utils/mock-preload-node.js')
       const preloadNode = MockPreloadNode.createNode()
       await preloadNode.start()
       if (options.runner !== 'node') {
@@ -37,9 +38,9 @@ module.exports = {
           port: 57483
         }, {
           type: 'js',
-          ipfsModule: require(__dirname),
-          ipfsHttpModule: require(path.join(__dirname, '..', 'ipfs-http-client')),
-          ipfsBin: path.resolve(path.join(__dirname, '..', 'ipfs', 'src', 'cli.js')),
+          ipfsModule: await import('./src/index.js'),
+          ipfsHttpModule: await import('ipfs-http-client'),
+          ipfsBin: path.resolve('../ipfs/src/cli.js'),
           ipfsOptions: {
             libp2p: {
               dialer: {
@@ -49,7 +50,7 @@ module.exports = {
           }
         }, {
           go: {
-            ipfsBin: require('go-ipfs').path()
+            ipfsBin: (await import('go-ipfs')).default.path()
           }
         }).start()
         return {
@@ -70,7 +71,7 @@ module.exports = {
     }
   },
   build: {
-    bundlesizeMax: '549KB',
+    bundlesizeMax: '477KB',
     config: esbuild
   }
 }

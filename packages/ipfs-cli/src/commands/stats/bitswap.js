@@ -1,9 +1,12 @@
-'use strict'
+import bitswapStat from '../bitswap/stat.js'
 
 // This is an alias for `bitswap stat`.
-const bitswapStats = Object.assign(require('../bitswap/stat.js'), {
+/** @type {bitswapStat} */
+const command = {
+  ...bitswapStat,
   // The command needs to be renamed, else it would be `stats stat` instead of
   // `stats bitswap`
   command: 'bitswap'
-})
-module.exports = bitswapStats
+}
+
+export default command

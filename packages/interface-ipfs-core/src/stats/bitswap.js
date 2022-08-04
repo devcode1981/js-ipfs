@@ -1,26 +1,29 @@
 /* eslint-env mocha */
-'use strict'
 
-const { getDescribe, getIt } = require('../utils/mocha')
-const { expectIsBitswap } = require('./utils')
+import { getDescribe, getIt } from '../utils/mocha.js'
+import { expectIsBitswap } from './utils.js'
 
-/** @typedef { import("ipfsd-ctl/src/factory") } Factory */
 /**
- * @param {Factory} common
- * @param {Object} options
+ * @typedef {import('ipfsd-ctl').Factory} Factory
  */
-module.exports = (common, options) => {
+
+/**
+ * @param {Factory} factory
+ * @param {object} options
+ */
+export function testBitswap (factory, options) {
   const describe = getDescribe(options)
   const it = getIt(options)
 
   describe('.stats.bitswap', () => {
+    /** @type {import('ipfs-core-types').IPFS} */
     let ipfs
 
     before(async () => {
-      ipfs = (await common.spawn()).api
+      ipfs = (await factory.spawn()).api
     })
 
-    after(() => common.clean())
+    after(() => factory.clean())
 
     it('should get bitswap stats', async () => {
       const res = await ipfs.stats.bitswap()

@@ -1,28 +1,32 @@
 /* eslint-env mocha */
-'use strict'
 
-const uint8ArrayFromString = require('uint8arrays/from-string')
-const { getDescribe, getIt, expect } = require('../../utils/mocha')
+import { fromString as uint8ArrayFromString } from 'uint8arrays/from-string'
+import { expect } from 'aegir/chai'
+import { getDescribe, getIt } from '../../utils/mocha.js'
 
-/** @typedef { import("ipfsd-ctl/src/factory") } Factory */
 /**
- * @param {Factory} common
- * @param {Object} options
+ * @typedef {import('ipfsd-ctl').Factory} Factory
  */
-module.exports = (common, options) => {
+
+/**
+ * @param {Factory} factory
+ * @param {object} options
+ */
+export function testSetData (factory, options) {
   const describe = getDescribe(options)
   const it = getIt(options)
 
   describe('.object.patch.setData', function () {
     this.timeout(80 * 1000)
 
+    /** @type {import('ipfs-core-types').IPFS} */
     let ipfs
 
     before(async () => {
-      ipfs = (await common.spawn()).api
+      ipfs = (await factory.spawn()).api
     })
 
-    after(() => common.clean())
+    after(() => factory.clean())
 
     it('should set data for an existing node', async () => {
       const obj = {
@@ -40,12 +44,14 @@ module.exports = (common, options) => {
     })
 
     it('returns error for request without key & data', () => {
+      // @ts-expect-error invalid arg
       return expect(ipfs.object.patch.setData(null, null)).to.eventually.be.rejected.and.be.an.instanceOf(Error)
     })
 
     it('returns error for request without data', () => {
       const filePath = 'test/fixtures/test-data/badnode.json'
 
+      // @ts-expect-error invalid arg
       return expect(ipfs.object.patch.setData(null, filePath)).to.eventually.be.rejected.and.be.an.instanceOf(Error)
     })
   })

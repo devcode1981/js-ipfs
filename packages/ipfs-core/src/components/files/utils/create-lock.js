@@ -1,7 +1,4 @@
-'use strict'
-
-// @ts-ignore - no types
-const mortice = require('mortice')
+import mortice from 'mortice'
 
 /**
  * @typedef {object} Lock
@@ -15,7 +12,7 @@ let lock
 /**
  * @param {boolean} [repoOwner]
  */
-module.exports = (repoOwner = false) => {
+export function createLock (repoOwner = false) {
   if (lock) {
     return lock
   }

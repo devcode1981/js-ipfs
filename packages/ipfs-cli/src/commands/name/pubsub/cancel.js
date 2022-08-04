@@ -1,25 +1,25 @@
-'use strict'
+import parseDuration from 'parse-duration'
 
-const { default: parseDuration } = require('parse-duration')
+/**
+ * @typedef {object} Argv
+ * @property {import('../../../types').Context} Argv.ctx
+ * @property {string} Argv.name
+ * @property {number} Argv.timeout
+ */
 
-module.exports = {
+/** @type {import('yargs').CommandModule<Argv, Argv>} */
+const command = {
   command: 'cancel <name>',
 
-  describe: 'Cancel a name subscription.',
+  describe: 'Cancel a name subscription',
 
   builder: {
     timeout: {
-      type: 'string',
+      string: true,
       coerce: parseDuration
     }
   },
 
-  /**
-   * @param {object} argv
-   * @param {import('../../../types').Context} argv.ctx
-   * @param {string} argv.name
-   * @param {number} argv.timeout
-   */
   async handler ({ ctx: { ipfs, print }, name, timeout }) {
     const result = await ipfs.name.pubsub.cancel(name, {
       timeout
@@ -27,3 +27,5 @@ module.exports = {
     print(result.canceled ? 'canceled' : 'no subscription')
   }
 }
+
+export default command

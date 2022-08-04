@@ -1,14 +1,10 @@
-'use strict'
+import Joi from '../../utils/joi.js'
+import { pipe } from 'it-pipe'
+import map from 'it-map'
+import last from 'it-last'
+import { streamResponse } from '../../utils/stream-response.js'
 
-const Joi = require('../../utils/joi')
-const { pipe } = require('it-pipe')
-const { map } = require('streaming-iterables')
-const last = require('it-last')
-// @ts-ignore no types
-const ndjson = require('iterable-ndjson')
-const streamResponse = require('../../utils/stream-response')
-
-exports.resolve = {
+export const resolveResource = {
   options: {
     validate: {
       options: {
@@ -68,13 +64,14 @@ exports.resolve = {
         signal,
         timeout
       }),
-      map(value => ({ Path: value })),
-      ndjson.stringify
+      async function * (source) {
+        yield * map(source, value => ({ Path: value }))
+      }
     ))
   }
 }
 
-exports.publish = {
+export const publishResource = {
   options: {
     validate: {
       options: {
@@ -142,134 +139,134 @@ exports.publish = {
   }
 }
 
-exports.pubsub = {
-  state: {
-    options: {
-      validate: {
-        options: {
-          allowUnknown: true,
-          stripUnknown: true
-        },
-        query: Joi.object().keys({
-          timeout: Joi.timeout()
-        })
-      }
-    },
-    /**
-     * @param {import('../../types').Request} request
-     * @param {import('@hapi/hapi').ResponseToolkit} h
-     */
-    async handler (request, h) {
-      const {
-        app: {
-          signal
-        },
-        server: {
-          app: {
-            ipfs
-          }
-        },
-        query: {
-          timeout
-        }
-      } = request
-
-      const res = await ipfs.name.pubsub.state({
-        signal,
-        timeout
-      })
-
-      return h.response({
-        Enabled: res.enabled
+export const stateResource = {
+  options: {
+    validate: {
+      options: {
+        allowUnknown: true,
+        stripUnknown: true
+      },
+      query: Joi.object().keys({
+        timeout: Joi.timeout()
       })
     }
   },
-  subs: {
-    options: {
-      validate: {
-        options: {
-          allowUnknown: true,
-          stripUnknown: true
-        },
-        query: Joi.object().keys({
-          timeout: Joi.timeout()
-        })
-      }
-    },
-    /**
-     * @param {import('../../types').Request} request
-     * @param {import('@hapi/hapi').ResponseToolkit} h
-     */
-    async handler (request, h) {
-      const {
+  /**
+   * @param {import('../../types').Request} request
+   * @param {import('@hapi/hapi').ResponseToolkit} h
+   */
+  async handler (request, h) {
+    const {
+      app: {
+        signal
+      },
+      server: {
         app: {
-          signal
-        },
-        server: {
-          app: {
-            ipfs
-          }
-        },
-        query: {
-          timeout
+          ipfs
         }
-      } = request
-
-      const res = await ipfs.name.pubsub.subs({
-        signal,
+      },
+      query: {
         timeout
-      })
+      }
+    } = request
 
-      return h.response({
-        Strings: res
+    const res = await ipfs.name.pubsub.state({
+      signal,
+      timeout
+    })
+
+    return h.response({
+      Enabled: res.enabled
+    })
+  }
+}
+
+export const pubsubSubsResource = {
+  options: {
+    validate: {
+      options: {
+        allowUnknown: true,
+        stripUnknown: true
+      },
+      query: Joi.object().keys({
+        timeout: Joi.timeout()
       })
     }
   },
-  cancel: {
-    options: {
-      validate: {
-        options: {
-          allowUnknown: true,
-          stripUnknown: true
-        },
-        query: Joi.object().keys({
-          topic: Joi.string().required(),
-          timeout: Joi.timeout()
-        })
-          .rename('arg', 'topic', {
-            override: true,
-            ignoreUndefined: true
-          })
-      }
-    },
-    /**
-     * @param {import('../../types').Request} request
-     * @param {import('@hapi/hapi').ResponseToolkit} h
-     */
-    async handler (request, h) {
-      const {
+  /**
+   * @param {import('../../types').Request} request
+   * @param {import('@hapi/hapi').ResponseToolkit} h
+   */
+  async handler (request, h) {
+    const {
+      app: {
+        signal
+      },
+      server: {
         app: {
-          signal
-        },
-        server: {
-          app: {
-            ipfs
-          }
-        },
-        query: {
-          topic,
-          timeout
+          ipfs
         }
-      } = request
-
-      const res = await ipfs.name.pubsub.cancel(topic, {
-        signal,
+      },
+      query: {
         timeout
-      })
+      }
+    } = request
 
-      return h.response({
-        Canceled: res.canceled
+    const res = await ipfs.name.pubsub.subs({
+      signal,
+      timeout
+    })
+
+    return h.response({
+      Strings: res
+    })
+  }
+}
+
+export const pubsubCancelResource = {
+  options: {
+    validate: {
+      options: {
+        allowUnknown: true,
+        stripUnknown: true
+      },
+      query: Joi.object().keys({
+        topic: Joi.string().required(),
+        timeout: Joi.timeout()
       })
+        .rename('arg', 'topic', {
+          override: true,
+          ignoreUndefined: true
+        })
     }
+  },
+  /**
+   * @param {import('../../types').Request} request
+   * @param {import('@hapi/hapi').ResponseToolkit} h
+   */
+  async handler (request, h) {
+    const {
+      app: {
+        signal
+      },
+      server: {
+        app: {
+          ipfs
+        }
+      },
+      query: {
+        topic,
+        timeout
+      }
+    } = request
+
+    const res = await ipfs.name.pubsub.cancel(topic, {
+      signal,
+      timeout
+    })
+
+    return h.response({
+      Canceled: res.canceled
+    })
   }
 }

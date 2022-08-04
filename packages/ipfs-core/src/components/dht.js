@@ -1,87 +1,146 @@
-'use strict'
-
-const PeerId = require('peer-id')
-const CID = require('cids')
-const errCode = require('err-code')
-const { NotEnabledError } = require('../errors')
-const get = require('dlv')
-const withTimeoutOption = require('ipfs-core-utils/src/with-timeout-option')
+import errCode from 'err-code'
+import { NotEnabledError } from '../errors.js'
+import { withTimeoutOption } from 'ipfs-core-utils/with-timeout-option'
+import { CID } from 'multiformats/cid'
+import { base58btc } from 'multiformats/bases/base58'
+import { base36 } from 'multiformats/bases/base36'
+import { concat as uint8ArrayConcat } from 'uint8arrays/concat'
+import { fromString as uint8ArrayFromString } from 'uint8arrays/from-string'
+import { peerIdFromString } from '@libp2p/peer-id'
 
 /**
- * @param {Object} config
- * @param {import('../types').NetworkService} config.network
- * @param {import('ipfs-repo')} config.repo
+ * @typedef {import('@libp2p/interfaces/dht').QueryEvent} QueryEvent
+ * @typedef {import('./network').Network} Network
+ * @typedef {import('@libp2p/interfaces/peer-id').PeerId} PeerId
  */
-module.exports = ({ network, repo }) => {
+
+const IPNS_PREFIX = '/ipns/'
+
+/**
+ * @param {string} str
+ */
+function toDHTKey (str) {
+  if (str.startsWith(IPNS_PREFIX)) {
+    str = str.substring(IPNS_PREFIX.length)
+  }
+
+  /** @type {Uint8Array|undefined} */
+  let buf
+
+  if (str[0] === '1' || str[0] === 'Q') {
+    // ed25519 key or hash of rsa key
+    str = `z${str}`
+  }
+
+  if (str[0] === 'z') {
+    buf = base58btc.decode(str)
+  }
+
+  if (str[0] === 'k') {
+    // base36 encoded string
+    buf = base36.decode(str)
+  }
+
+  if (!buf) {
+    throw new Error('Could not parse string')
+  }
+
+  if (buf[0] !== 0x01 && buf[1] !== 0x72) {
+    // prefix key with CIDv1 and libp2p-key codec
+    buf = uint8ArrayConcat([
+      [0x01, 0x72],
+      buf
+    ])
+  }
+
+  if (buf.length !== 40) {
+    throw new Error('Incorrect length ' + buf.length)
+  }
+
+  return uint8ArrayConcat([
+    uint8ArrayFromString(IPNS_PREFIX),
+    buf.subarray(2)
+  ])
+}
+
+/**
+ * @param {object} config
+ * @param {import('../types').NetworkService} config.network
+ * @param {import('ipfs-repo').IPFSRepo} config.repo
+ * @param {PeerId} config.peerId
+ */
+export function createDht ({ network, repo, peerId }) {
   const { get, put, findProvs, findPeer, provide, query } = {
     /**
-     * @type {import('ipfs-core-types/src/dht').API["get"]}
+     * @type {import('ipfs-core-types/src/dht').API<{}>["get"]}
      */
-    async get (key, options = {}) {
-      const { libp2p } = await use(network, options)
-      return libp2p._dht.get(normalizeCID(key), options)
+    async * get (key, options = {}) {
+      const { libp2p } = await use(network, peerId, options)
+
+      const dhtKey = key instanceof Uint8Array ? key : toDHTKey(key)
+
+      if (libp2p.dht == null) {
+        throw errCode(new Error('dht not configured'), 'ERR_DHT_NOT_CONFIGURED')
+      }
+
+      yield * libp2p.dht.get(dhtKey, options)
     },
 
     /**
-     * @type {import('ipfs-core-types/src/dht').API["put"]}
+     * @type {import('ipfs-core-types/src/dht').API<{}>["put"]}
      */
     async * put (key, value, options) {
-      const { libp2p } = await use(network, options)
-      yield * libp2p._dht.put(normalizeCID(key), value)
+      const { libp2p } = await use(network, peerId, options)
+
+      const dhtKey = key instanceof Uint8Array ? key : toDHTKey(key)
+
+      if (libp2p.dht == null) {
+        throw errCode(new Error('dht not configured'), 'ERR_DHT_NOT_CONFIGURED')
+      }
+
+      yield * libp2p.dht.put(dhtKey, value)
     },
 
     /**
-     * @type {import('ipfs-core-types/src/dht').API["findProvs"]}
+     * @type {import('ipfs-core-types/src/dht').API<{}>["findProvs"]}
      */
-    async * findProvs (cid, options = { numProviders: 20 }) {
-      const { libp2p } = await use(network, options)
+    async * findProvs (cid, options = {}) {
+      const { libp2p } = await use(network, peerId, options)
 
-      for await (const peer of libp2p._dht.findProviders(normalizeCID(cid), {
-        maxNumProviders: options.numProviders,
+      if (libp2p.dht == null) {
+        throw errCode(new Error('dht not configured'), 'ERR_DHT_NOT_CONFIGURED')
+      }
+
+      yield * libp2p.dht.findProviders(cid, {
         signal: options.signal
-      })) {
-        yield {
-          id: peer.id.toB58String(),
-          addrs: peer.addrs
-        }
-      }
+      })
     },
 
     /**
-     * @type {import('ipfs-core-types/src/dht').API["findPeer"]}
+     * @type {import('ipfs-core-types/src/dht').API<{}>["findPeer"]}
      */
-    async findPeer (peerId, options) {
-      const { libp2p } = await use(network, options)
-      const peer = await libp2p._dht.findPeer(PeerId.createFromCID(peerId))
+    async * findPeer (peerIdToFind, options = {}) {
+      const { libp2p } = await use(network, peerId, options)
 
-      return {
-        id: peer.id.toB58String(),
-        addrs: peer.multiaddrs
+      if (libp2p.dht == null) {
+        throw errCode(new Error('dht not configured'), 'ERR_DHT_NOT_CONFIGURED')
       }
+
+      yield * libp2p.dht.findPeer(peerIdToFind, {
+        signal: options.signal
+      })
     },
 
     /**
-     * @type {import('ipfs-core-types/src/dht').API["provide"]}
+     * @type {import('ipfs-core-types/src/dht').API<{}>["provide"]}
      */
-    async * provide (cids, options = { recursive: false }) {
-      const { libp2p } = await use(network, options)
-      cids = Array.isArray(cids) ? cids : [cids]
-
-      for (const i in cids) {
-        if (typeof cids[i] === 'string') {
-          try {
-            cids[i] = new CID(cids[i])
-          } catch (err) {
-            throw errCode(err, 'ERR_INVALID_CID')
-          }
-        }
-      }
+    async * provide (cid, options = { recursive: false }) {
+      const { libp2p } = await use(network, peerId, options)
 
       // ensure blocks are actually local
-      const hasCids = await Promise.all(cids.map(cid => repo.blocks.has(cid)))
-      const hasAll = hasCids.every(has => has)
+      const hasBlock = await repo.blocks.has(cid)
 
-      if (!hasAll) {
+      if (!hasBlock) {
         throw errCode(new Error('block(s) not found locally, cannot provide'), 'ERR_BLOCK_NOT_FOUND')
       }
 
@@ -90,23 +149,32 @@ module.exports = ({ network, repo }) => {
         throw errCode(new Error('not implemented yet'), 'ERR_NOT_IMPLEMENTED_YET')
       }
 
-      for (const cid of cids) {
-        yield libp2p._dht.provide(cid)
+      if (libp2p.dht == null) {
+        throw errCode(new Error('dht not configured'), 'ERR_DHT_NOT_CONFIGURED')
       }
+
+      yield * libp2p.dht.provide(cid)
     },
 
     /**
-     * @type {import('ipfs-core-types/src/dht').API["query"]}
+     * @type {import('ipfs-core-types/src/dht').API<{}>["query"]}
      */
-    async * query (peerId, options) {
-      const { libp2p } = await use(network, options)
+    async * query (peerIdToQuery, options = {}) {
+      const { libp2p } = await use(network, peerId, options)
+      let bytes
+      const asCid = CID.asCID(peerIdToQuery)
 
-      for await (const closerPeerId of libp2p._dht.getClosestPeers(PeerId.createFromCID(peerId).toBytes())) {
-        yield {
-          id: closerPeerId.toB58String(),
-          addrs: [] // TODO: get addrs?
-        }
+      if (asCid != null) {
+        bytes = asCid.multihash.bytes
+      } else {
+        bytes = peerIdFromString(peerIdToQuery.toString()).toBytes()
       }
+
+      if (libp2p.dht == null) {
+        throw errCode(new Error('dht not configured'), 'ERR_DHT_NOT_CONFIGURED')
+      }
+
+      yield * libp2p.dht.getClosestPeers(bytes, options)
     }
   }
 
@@ -121,40 +189,42 @@ module.exports = ({ network, repo }) => {
 }
 
 /**
- * Turns given cid in some stringifyable representation, to Uint8Array
- * representation. Throws an error if given value isn't a valid CID.
- *
- * @param {any} cid
- * @returns {Uint8Array}
- */
-const parseCID = cid => {
-  try {
-    const cidStr = cid.toString().split('/')
-      .filter((/** @type {string} */ part) => part && part !== 'ipfs' && part !== 'ipns')[0]
-
-    return (new CID(cidStr)).bytes
-  } catch (error) {
-    throw errCode(error, 'ERR_INVALID_CID')
-  }
-}
-
-/**
- * Turns given cid in some representation to Uint8Array representation
- *
- * @param {any} cid
- */
-const normalizeCID = cid =>
-  cid instanceof Uint8Array ? cid : parseCID(cid)
-
-/**
  * @param {import('../types').NetworkService} network
+ * @param {PeerId} peerId
  * @param {import('ipfs-core-types/src/utils').AbortOptions} [options]
+ * @returns {Promise<Network>}
  */
-const use = async (network, options) => {
+const use = async (network, peerId, options) => {
   const net = await network.use(options)
-  if (get(net.libp2p, '_config.dht.enabled', false)) {
+  if (net.libp2p.dht != null) {
     return net
   } else {
-    throw new NotEnabledError('dht not enabled')
+    const fn = async function * () {
+      yield {
+        from: peerId,
+        name: 'QUERY_ERROR',
+        type: 3,
+        error: new NotEnabledError('dht not enabled')
+      }
+    }
+
+    return {
+      libp2p: {
+        dht: {
+          // @ts-expect-error incomplete implementation
+          get: fn,
+          // @ts-expect-error incomplete implementation
+          put: fn,
+          // @ts-expect-error incomplete implementation
+          findProviders: fn,
+          // @ts-expect-error incomplete implementation
+          findPeer: fn,
+          // @ts-expect-error incomplete implementation
+          provide: fn,
+          // @ts-expect-error incomplete implementation
+          getClosestPeers: fn
+        }
+      }
+    }
   }
 }

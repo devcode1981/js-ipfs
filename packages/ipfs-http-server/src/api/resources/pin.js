@@ -1,17 +1,13 @@
-'use strict'
-
-const Joi = require('../../utils/joi')
-const Boom = require('@hapi/boom')
-const { map, reduce } = require('streaming-iterables')
-const { pipe } = require('it-pipe')
-// @ts-ignore no types
-const ndjson = require('iterable-ndjson')
-const { cidToString } = require('ipfs-core-utils/src/cid')
-const streamResponse = require('../../utils/stream-response')
-const all = require('it-all')
+import Joi from '../../utils/joi.js'
+import Boom from '@hapi/boom'
+import map from 'it-map'
+import { pipe } from 'it-pipe'
+import { streamResponse } from '../../utils/stream-response.js'
+import all from 'it-all'
+import reduce from 'it-reduce'
 
 /**
- * @typedef {import('cids')} CID
+ * @typedef {import('multiformats/cid').CID} CID
  */
 
 /**
@@ -36,7 +32,7 @@ function toPin (type, cid, metadata) {
   return output
 }
 
-exports.ls = {
+export const lsResource = {
   options: {
     validate: {
       options: {
@@ -46,7 +42,7 @@ exports.ls = {
       query: Joi.object().keys({
         paths: Joi.array().single().items(Joi.ipfsPath()),
         recursive: Joi.boolean().default(true),
-        cidBase: Joi.cidBase(),
+        cidBase: Joi.string().default('base58btc'),
         type: Joi.string().valid('all', 'direct', 'indirect', 'recursive').default('all'),
         stream: Joi.boolean().default(false),
         timeout: Joi.timeout()
@@ -91,13 +87,21 @@ exports.ls = {
       timeout
     })
 
+    const base = await ipfs.bases.getBase(cidBase)
+
     if (!stream) {
       const res = await pipe(
         source,
-        reduce((/** @type {{ Keys: Record<string, any> }} */ res, { type, cid, metadata }) => {
-          res.Keys[cidToString(cid, { base: cidBase })] = toPin(type, undefined, metadata)
-          return res
-        }, { Keys: {} })
+        function collectKeys (source) {
+          /** @type {{ Keys: Record<string, any> }} */
+          const init = { Keys: {} }
+
+          return reduce(source, (res, { type, cid, metadata }) => {
+            res.Keys[cid.toString(base.encoder)] = toPin(type, undefined, metadata)
+
+            return res
+          }, init)
+        }
       )
 
       return h.response(res)
@@ -105,13 +109,14 @@ exports.ls = {
 
     return streamResponse(request, h, () => pipe(
       source,
-      map(({ type, cid, metadata }) => toPin(type, cidToString(cid, { base: cidBase }), metadata)),
-      ndjson.stringify
+      async function * transform (source) {
+        yield * map(source, ({ type, cid, metadata }) => toPin(type, cid.toString(base.encoder), metadata))
+      }
     ))
   }
 }
 
-exports.add = {
+export const addResource = {
   options: {
     validate: {
       options: {
@@ -121,7 +126,7 @@ exports.add = {
       query: Joi.object().keys({
         cids: Joi.array().single().items(Joi.cid()).min(1).required(),
         recursive: Joi.boolean().default(true),
-        cidBase: Joi.cidBase(),
+        cidBase: Joi.string().default('base58btc'),
         timeout: Joi.timeout(),
         metadata: Joi.json()
       })
@@ -164,7 +169,7 @@ exports.add = {
         signal,
         timeout
       }))
-    } catch (err) {
+    } catch (/** @type {any} */ err) {
       if (err.code === 'ERR_BAD_PATH') {
         throw Boom.boomify(err, { statusCode: 400 })
       }
@@ -176,13 +181,15 @@ exports.add = {
       throw Boom.boomify(err, { message: 'Failed to add pin' })
     }
 
+    const base = await ipfs.bases.getBase(cidBase)
+
     return h.response({
-      Pins: result.map(cid => cidToString(cid, { base: cidBase }))
+      Pins: result.map(cid => cid.toString(base.encoder))
     })
   }
 }
 
-exports.rm = {
+export const rmResource = {
   options: {
     validate: {
       options: {
@@ -192,7 +199,7 @@ exports.rm = {
       query: Joi.object().keys({
         cids: Joi.array().single().items(Joi.cid()).min(1).required(),
         recursive: Joi.boolean().default(true),
-        cidBase: Joi.cidBase(),
+        cidBase: Joi.string().default('base58btc'),
         timeout: Joi.timeout()
       })
         .rename('cid-base', 'cidBase', {
@@ -233,7 +240,7 @@ exports.rm = {
         signal,
         timeout
       }))
-    } catch (err) {
+    } catch (/** @type {any} */ err) {
       if (err.code === 'ERR_BAD_PATH') {
         throw Boom.boomify(err, { statusCode: 400 })
       }
@@ -241,8 +248,10 @@ exports.rm = {
       throw Boom.boomify(err, { message: 'Failed to remove pin' })
     }
 
+    const base = await ipfs.bases.getBase(cidBase)
+
     return h.response({
-      Pins: result.map(cid => cidToString(cid, { base: cidBase }))
+      Pins: result.map(cid => cid.toString(base.encoder))
     })
   }
 }

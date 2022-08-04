@@ -1,11 +1,12 @@
 /* eslint-env mocha, browser */
-'use strict'
 
-const { Multiaddr } = require('multiaddr')
-const { expect } = require('aegir/utils/chai')
-const f = require('./utils/factory')()
-const { create: ipfsClient } = require('../src/index.js')
-const { isBrowser } = require('ipfs-utils/src/env')
+import { Multiaddr } from '@multiformats/multiaddr'
+import { expect } from 'aegir/chai'
+import { factory } from './utils/factory.js'
+import { create as ipfsClient } from '../src/index.js'
+import { isBrowser } from 'ipfs-utils/src/env.js'
+
+const f = factory()
 
 describe('ipfs-http-client constructor tests', () => {
   describe('parameter permuations', () => {

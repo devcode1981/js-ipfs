@@ -1,28 +1,34 @@
-'use strict'
+import { logger } from '@libp2p/logger'
+import { createRepo } from 'ipfs-core-config/repo'
+import getDefaultConfig from 'ipfs-core-config/config'
+import { fromString as uint8ArrayFromString } from 'uint8arrays/from-string'
+import { toString as uint8ArrayToString } from 'uint8arrays/to-string'
+import { peerIdFromKeys } from '@libp2p/peer-id'
+import { isPeerId } from '@libp2p/interfaces/peer-id'
+import mergeOpts from 'merge-options'
+import { profiles as configProfiles } from './config/profiles.js'
+import { NotEnabledError, NotInitializedError } from '../errors.js'
+import { createLibp2p } from './libp2p.js'
+import { ERR_REPO_NOT_INITIALIZED } from 'ipfs-repo/errors'
+import { createEd25519PeerId, createRSAPeerId } from '@libp2p/peer-id-factory'
+import errCode from 'err-code'
+import { unmarshalPrivateKey } from '@libp2p/crypto/keys'
 
-const log = require('debug')('ipfs:components:peer:storage')
-const createRepo = require('../runtime/repo-nodejs')
-const getDefaultConfig = require('../runtime/config-nodejs')
-const { ERR_REPO_NOT_INITIALIZED } = require('ipfs-repo').errors
-const uint8ArrayFromString = require('uint8arrays/from-string')
-const uint8ArrayToString = require('uint8arrays/to-string')
-const PeerId = require('peer-id')
-const { mergeOptions } = require('../utils')
-const configService = require('./config')
-const { NotEnabledError } = require('../errors')
-const createLibP2P = require('./libp2p')
+const mergeOptions = mergeOpts.bind({ ignoreUndefined: true })
+const log = logger('ipfs:components:peer:storage')
 
 /**
- * @typedef {import('ipfs-repo')} IPFSRepo
+ * @typedef {import('ipfs-repo').IPFSRepo} IPFSRepo
  * @typedef {import('../types').Options} IPFSOptions
  * @typedef {import('../types').InitOptions} InitOptions
  * @typedef {import('../types').Print} Print
  * @typedef {import('ipfs-core-types/src/config').Config} IPFSConfig
- * @typedef {import('libp2p-crypto').KeyType} KeyType
- * @typedef {import('libp2p/src/keychain')} Keychain
+ * @typedef {import('@libp2p/crypto/keys').KeyTypes} KeyType
+ * @typedef {import('@libp2p/interfaces/keychain').KeyChain} Keychain
+ * @typedef {import('@libp2p/interfaces/peer-id').PeerId} PeerId
  */
 
-class Storage {
+export class Storage {
   /**
    * @private
    * @param {PeerId} peerId
@@ -42,23 +48,27 @@ class Storage {
 
   /**
    * @param {Print} print
+   * @param {import('ipfs-core-utils/multicodecs').Multicodecs} codecs
    * @param {IPFSOptions} options
    */
-  static async start (print, options) {
-    const { repoAutoMigrate, repo: inputRepo } = options
+  static async start (print, codecs, options) {
+    const { repoAutoMigrate, repo: inputRepo, onMigrationProgress } = options
 
     const repo = (typeof inputRepo === 'string' || inputRepo == null)
-      ? createRepo(print, { path: inputRepo, autoMigrate: Boolean(repoAutoMigrate) })
+      ? createRepo(print, codecs, {
+        path: inputRepo,
+        autoMigrate: repoAutoMigrate,
+        onMigrationProgress: onMigrationProgress
+      })
       : inputRepo
 
     const { peerId, keychain, isNew } = await loadRepo(print, repo, options)
 
     // TODO: throw error?
-    // @ts-ignore On start, keychain will always be available
+    // @ts-expect-error On start, keychain will always be available
     return new Storage(peerId, keychain, repo, print, isNew)
   }
 }
-module.exports = Storage
 
 /**
  * @param {Print} print
@@ -74,7 +84,7 @@ const loadRepo = async (print, repo, options) => {
     await repo.open()
 
     return { ...await configureRepo(repo, options), isNew: false }
-  } catch (err) {
+  } catch (/** @type {any} */ err) {
     if (err.code !== ERR_REPO_NOT_INITIALIZED) {
       throw err
     }
@@ -125,23 +135,35 @@ const initRepo = async (print, repo, options) => {
 
   log('repo opened')
 
+  /** @type {import('./libp2p').KeychainConfig} */
+  const keychainConfig = {
+    pass: options.pass
+  }
+
+  try {
+    keychainConfig.dek = await repo.config.get('Keychain.DEK')
+  } catch (/** @type {any} */ err) {
+    if (err.code !== 'ERR_NOT_FOUND') {
+      throw err
+    }
+  }
+
   // Create libp2p for Keychain creation
-  const libp2p = await createLibP2P({
+  const libp2p = await createLibp2p({
     options: undefined,
     multiaddrs: undefined,
     peerId,
     repo,
     config,
-    keychainConfig: {
-      pass: options.pass
-    }
+    keychainConfig
   })
 
-  if (libp2p.keychain && libp2p.keychain.opts) {
+  if (libp2p.keychain) {
     await libp2p.loadKeychain()
 
     await repo.config.set('Keychain', {
-      dek: libp2p.keychain.opts.dek
+      // @ts-expect-error private field
+      DEK: libp2p.keychain.init.dek
     })
   }
 
@@ -153,38 +175,57 @@ const initRepo = async (print, repo, options) => {
  * an instance and returns a `PeerId` instance.
  *
  * @param {PeerId|string} peerId
- * @returns {Promise<PeerId>|PeerId}
+ * @returns {Promise<PeerId>}
  */
-const decodePeerId = (peerId) => {
+const decodePeerId = async (peerId) => {
   log('using user-supplied private-key')
-  return typeof peerId === 'object'
-    ? peerId
-    : PeerId.createFromPrivKey(uint8ArrayFromString(peerId, 'base64pad'))
+  if (isPeerId(peerId)) {
+    return peerId
+  }
+
+  const rawPrivateKey = uint8ArrayFromString(peerId, 'base64pad')
+  const key = await unmarshalPrivateKey(rawPrivateKey)
+  return await peerIdFromKeys(key.public.bytes, key.bytes)
 }
 
 /**
  * Initializes new PeerId by generating an underlying keypair.
  *
  * @param {Print} print
- * @param {Object} options
- * @param {KeyType} [options.algorithm='RSA']
+ * @param {object} options
+ * @param {KeyType} [options.algorithm='Ed25519']
  * @param {number} [options.bits=2048]
  * @returns {Promise<PeerId>}
  */
-const initPeerId = (print, { algorithm = 'RSA', bits = 2048 }) => {
+const initPeerId = (print, { algorithm = 'Ed25519', bits = 2048 }) => {
   // Generate peer identity keypair + transform to desired format + add to config.
-  print('generating %s-bit (rsa only) %s keypair...', bits, algorithm)
-  return PeerId.create({ keyType: algorithm, bits })
+  print('generating %s keypair...', algorithm)
+
+  if (algorithm === 'Ed25519') {
+    return createEd25519PeerId()
+  }
+
+  if (algorithm === 'RSA') {
+    return createRSAPeerId({ bits })
+  }
+
+  throw errCode(new Error('Unknown PeerId algorithm'), 'ERR_UNKNOWN_PEER_ID_ALGORITHM')
 }
 
 /**
  * @param {PeerId} peerId
  */
-const peerIdToIdentity = (peerId) => ({
-  PeerID: peerId.toB58String(),
-  /** @type {string} */
-  PrivKey: uint8ArrayToString(peerId.privKey.bytes, 'base64pad')
-})
+const peerIdToIdentity = (peerId) => {
+  if (peerId.privateKey == null) {
+    throw errCode(new Error('Private key missing'), 'ERR_MISSING_PRIVATE_KEY')
+  }
+
+  return {
+    PeerID: peerId.toString(),
+    /** @type {string} */
+    PrivKey: uint8ArrayToString(peerId.privateKey, 'base64pad')
+  }
+}
 
 /**
  * Applies passed `profiles` and a `config` to an open repo.
@@ -198,16 +239,20 @@ const configureRepo = async (repo, options) => {
   const profiles = (options.init && options.init.profiles) || []
   const pass = options.pass
   const original = await repo.config.getAll()
-  // @ts-ignore TODO: move config types to repo
   const changed = mergeConfigs(applyProfiles(original, profiles), config)
 
   if (original !== changed) {
     await repo.config.replace(changed)
   }
 
-  // @ts-ignore - Identity may not be present
-  const peerId = await PeerId.createFromPrivKey(changed.Identity.PrivKey)
-  const libp2p = await createLibP2P({
+  if (!changed.Identity || !changed.Identity.PrivKey) {
+    throw new NotInitializedError('No private key was found in the config, please intialize the repo')
+  }
+
+  const buf = uint8ArrayFromString(changed.Identity.PrivKey, 'base64pad')
+  const key = await unmarshalPrivateKey(buf)
+  const peerId = await peerIdFromKeys(key.public.bytes, key.bytes)
+  const libp2p = await createLibp2p({
     options: undefined,
     multiaddrs: undefined,
     peerId,
@@ -241,7 +286,7 @@ const mergeConfigs = (config, changes) =>
  */
 const applyProfiles = (config, profiles) => {
   return (profiles || []).reduce((config, name) => {
-    const profile = configService.profiles[name]
+    const profile = configProfiles[name]
     if (!profile) {
       throw new Error(`Could not find profile with name '${name}'`)
     }

@@ -1,15 +1,22 @@
-'use strict'
+import { commands } from './key/index.js'
 
-module.exports = {
+/** @type {import('yargs').CommandModule} */
+const command = {
   command: 'key <command>',
 
-  description: 'Manage your keys',
+  describe: 'Manage your keys',
 
-  /**
-   * @param {import('yargs').Argv} yargs
-   */
   builder (yargs) {
+    commands.forEach(command => {
+      yargs.command(command)
+    })
+
     return yargs
-      .commandDir('key')
+  },
+
+  handler () {
+
   }
 }
+
+export default command

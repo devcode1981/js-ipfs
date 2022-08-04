@@ -3,7 +3,93 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
-# [0.3.0](https://github.com/ipfs/js-ipfs/compare/ipfs-grpc-protocol@0.2.0...ipfs-grpc-protocol@0.3.0) (2021-05-10)
+## [0.6.0](https://www.github.com/ipfs/js-ipfs/compare/ipfs-grpc-protocol-v0.5.5...ipfs-grpc-protocol-v0.6.0) (2022-05-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* This module is now ESM only and there return types of some methods have changed
+
+### Features
+
+* update to libp2p 0.37.x ([#4092](https://www.github.com/ipfs/js-ipfs/issues/4092)) ([74aee8b](https://www.github.com/ipfs/js-ipfs/commit/74aee8b3d78f233c3199a3e9a6c0ac628a31a433))
+
+### [0.5.5](https://github.com/ipfs/js-ipfs/compare/ipfs-grpc-protocol@0.5.4...ipfs-grpc-protocol@0.5.5) (2021-12-15)
+
+**Note:** Version bump only for package ipfs-grpc-protocol
+
+
+
+
+
+### [0.5.4](https://github.com/ipfs/js-ipfs/compare/ipfs-grpc-protocol@0.5.3...ipfs-grpc-protocol@0.5.4) (2021-11-24)
+
+**Note:** Version bump only for package ipfs-grpc-protocol
+
+
+
+
+
+### [0.5.3](https://github.com/ipfs/js-ipfs/compare/ipfs-grpc-protocol@0.5.2...ipfs-grpc-protocol@0.5.3) (2021-11-19)
+
+**Note:** Version bump only for package ipfs-grpc-protocol
+
+
+
+
+
+### [0.5.2](https://github.com/ipfs/js-ipfs/compare/ipfs-grpc-protocol@0.5.1...ipfs-grpc-protocol@0.5.2) (2021-11-12)
+
+**Note:** Version bump only for package ipfs-grpc-protocol
+
+
+
+
+
+### [0.5.1](https://github.com/ipfs/js-ipfs/compare/ipfs-grpc-protocol@0.5.0...ipfs-grpc-protocol@0.5.1) (2021-09-28)
+
+**Note:** Version bump only for package ipfs-grpc-protocol
+
+
+
+
+
+## [0.5.0](https://github.com/ipfs/js-ipfs/compare/ipfs-grpc-protocol@0.4.1...ipfs-grpc-protocol@0.5.0) (2021-09-24)
+
+
+### Features
+
+* switch to esm ([#3879](https://github.com/ipfs/js-ipfs/issues/3879)) ([9a40109](https://github.com/ipfs/js-ipfs/commit/9a40109632e5b4837eb77a2f57dbc77fbf1fe099))
+
+
+### BREAKING CHANGES
+
+* There are no default exports and everything is now dual published as ESM/CJS
+
+
+
+
+
+### [0.4.1](https://github.com/ipfs/js-ipfs/compare/ipfs-grpc-protocol@0.4.0...ipfs-grpc-protocol@0.4.1) (2021-09-17)
+
+**Note:** Version bump only for package ipfs-grpc-protocol
+
+
+
+
+
+## [0.4.0](https://github.com/ipfs/js-ipfs/compare/ipfs-grpc-protocol@0.3.0...ipfs-grpc-protocol@0.4.0) (2021-08-17)
+
+
+### Features
+
+* pubsub over gRPC ([#3813](https://github.com/ipfs/js-ipfs/issues/3813)) ([e7d5509](https://github.com/ipfs/js-ipfs/commit/e7d5509c87e87aed6be3c1d0b2a01ab74cdc1ed9)), closes [#3741](https://github.com/ipfs/js-ipfs/issues/3741)
+
+
+
+
+
+## [0.3.0](https://github.com/ipfs/js-ipfs/compare/ipfs-grpc-protocol@0.2.0...ipfs-grpc-protocol@0.3.0) (2021-05-10)
 
 
 ### chore
@@ -19,7 +105,7 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 
 
-# [0.2.0](https://github.com/ipfs/js-ipfs/compare/ipfs-grpc-protocol@0.1.0...ipfs-grpc-protocol@0.2.0) (2021-02-01)
+## [0.2.0](https://github.com/ipfs/js-ipfs/compare/ipfs-grpc-protocol@0.1.0...ipfs-grpc-protocol@0.2.0) (2021-02-01)
 
 
 ### chore

@@ -1,8 +1,7 @@
-'use strict'
 
 /** @type {import('aegir').PartialOptions} */
-module.exports = {
+export default {
   build: {
-    bundlesizeMax: '56KB'
+    bundlesizeMax: '53KB'
   }
 }

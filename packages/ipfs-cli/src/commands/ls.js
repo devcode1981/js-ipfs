@@ -1,13 +1,19 @@
-'use strict'
+import { rightpad, stripControlCharacters } from '../utils.js'
+import { formatMode } from 'ipfs-core-utils/files/format-mode'
+import { formatMtime } from 'ipfs-core-utils/files/format-mtime'
+import parseDuration from 'parse-duration'
 
-const multibase = require('multibase')
-const { rightpad, stripControlCharacters } = require('../utils')
-const { cidToString } = require('ipfs-core-utils/src/cid')
-const formatMode = require('ipfs-core-utils/src/files/format-mode')
-const formatMtime = require('ipfs-core-utils/src/files/format-mtime')
-const { default: parseDuration } = require('parse-duration')
+/**
+ * @typedef {object} Argv
+ * @property {import('../types').Context} Argv.ctx
+ * @property {string} Argv.key
+ * @property {boolean} Argv.headers
+ * @property {string} Argv.cidBase
+ * @property {number} Argv.timeout
+ */
 
-module.exports = {
+/** @type {import('yargs').CommandModule<Argv, Argv>} */
+const command = {
   command: 'ls <key>',
 
   describe: 'List files for the given directory',
@@ -15,42 +21,22 @@ module.exports = {
   builder: {
     v: {
       alias: 'headers',
-      desc: 'Print table headers (Hash, Size, Name).',
-      type: 'boolean',
+      desc: 'Print table headers (Hash, Size, Name)',
+      boolean: true,
       default: false
-    },
-    r: {
-      alias: 'recursive',
-      desc: 'List subdirectories recursively',
-      type: 'boolean',
-      default: false
-    },
-    'resolve-type': {
-      desc: 'Resolve linked objects to find out their types. (not implemented yet)',
-      type: 'boolean',
-      default: false // should be true when implemented
     },
     'cid-base': {
-      describe: 'Number base to display CIDs in.',
-      type: 'string',
-      choices: Object.keys(multibase.names)
+      describe: 'Number base to display CIDs in',
+      string: true,
+      default: 'base58btc'
     },
     timeout: {
-      type: 'string',
+      string: true,
       coerce: parseDuration
     }
   },
 
-  /**
-   * @param {object} argv
-   * @param {import('../types').Context} argv.ctx
-   * @param {string} argv.key
-   * @param {boolean} argv.recursive
-   * @param {boolean} argv.headers
-   * @param {import('multibase').BaseName} argv.cidBase
-   * @param {number} argv.timeout
-   */
-  async handler ({ ctx: { ipfs, print }, key, recursive, headers, cidBase, timeout }) {
+  async handler ({ ctx: { ipfs, print }, key, headers, cidBase, timeout }) {
     // replace multiple slashes
     key = key.replace(/\/(\/+)/g, '/')
 
@@ -99,10 +85,12 @@ module.exports = {
       )
     }
 
-    for await (const link of ipfs.ls(key, { recursive, timeout })) {
+    const base = await ipfs.bases.getBase(cidBase)
+
+    for await (const link of ipfs.ls(key, { timeout })) {
       const mode = link.mode != null ? formatMode(link.mode, link.type === 'dir') : ''
       const mtime = link.mtime != null ? formatMtime(link.mtime) : '-'
-      const cid = cidToString(link.cid, { base: cidBase })
+      const cid = link.cid.toString(base.encoder)
       const size = link.size ? String(link.size) : '-'
       const name = stripControlCharacters(link.type === 'dir' ? `${link.name || ''}/` : link.name)
 
@@ -115,7 +103,9 @@ module.exports = {
         }
       }
 
-      printLink(mode, mtime, cid, size, name, link.depth)
+      printLink(mode, mtime, cid, size, name)
     }
   }
 }
+
+export default command

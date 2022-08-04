@@ -1,26 +1,31 @@
 /* eslint-env mocha */
-'use strict'
 
-const { getDescribe, getIt, expect } = require('../utils/mocha')
+import { expect } from 'aegir/chai'
+import { getDescribe, getIt } from '../utils/mocha.js'
 
-/** @typedef { import("ipfsd-ctl/src/factory") } Factory */
 /**
- * @param {Factory} common
- * @param {Object} options
+ * @typedef {import('ipfsd-ctl').Factory} Factory
  */
-module.exports = (common, options) => {
+
+/**
+ * @param {Factory} factory
+ * @param {object} options
+ */
+export function testGet (factory, options) {
   const describe = getDescribe(options)
   const it = getIt(options)
 
   describe('.config.get', function () {
     this.timeout(30 * 1000)
+    /** @type {import('ipfs-core-types').IPFS} */
     let ipfs
 
-    before(async () => { ipfs = (await common.spawn()).api })
+    before(async () => { ipfs = (await factory.spawn()).api })
 
-    after(() => common.clean())
+    after(() => factory.clean())
 
     it('should fail with error', async () => {
+      // @ts-expect-error missing arg
       await expect(ipfs.config.get()).to.eventually.rejectedWith('key argument is required')
     })
 
@@ -35,6 +40,7 @@ module.exports = (common, options) => {
     })
 
     it('should fail on non valid key', () => {
+      // @ts-expect-error invalid arg
       return expect(ipfs.config.get(1234)).to.eventually.be.rejected()
     })
 
@@ -45,11 +51,12 @@ module.exports = (common, options) => {
 
   describe('.config.getAll', function () {
     this.timeout(30 * 1000)
+    /** @type {import('ipfs-core-types').IPFS} */
     let ipfs
 
-    before(async () => { ipfs = (await common.spawn()).api })
+    before(async () => { ipfs = (await factory.spawn()).api })
 
-    after(() => common.clean())
+    after(() => factory.clean())
 
     it('should retrieve the whole config', async () => {
       const config = await ipfs.config.getAll()

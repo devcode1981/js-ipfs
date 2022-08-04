@@ -1,6 +1,6 @@
 {
   "name": "ipfs-message-port-client",
-  "version": "0.6.3",
+  "version": "0.12.4",
   "description": "IPFS client library for accessing IPFS node over message port",
   "keywords": [
     "ipfs",
@@ -10,14 +10,25 @@
   "homepage": "https://github.com/ipfs/js-ipfs/tree/master/packages/ipfs-message-port-client#readme",
   "bugs": "https://github.com/ipfs/js-ipfs/issues",
   "license": "(Apache-2.0 OR MIT)",
-  "leadMaintainer": "Alex Potsides <alex@achingbrain.net>",
-  "files": [
-    "src",
-    "dist",
-    "!dist/*.tsbuildinfo"
-  ],
+  "type": "module",
   "main": "src/index.js",
   "types": "dist/src/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "!**/*.tsbuildinfo"
+  ],
+  "exports": {
+    ".": {
+      "import": "./src/index.js"
+    }
+  },
+  "eslintConfig": {
+    "extends": "ipfs",
+    "parserOptions": {
+      "sourceType": "module"
+    }
+  },
   "browser": {},
   "repository": {
     "type": "git",
@@ -25,29 +36,28 @@
   },
   "scripts": {
     "build": "aegir build",
-    "test": "echo 'Only interface tests live here'",
     "test:interface:message-port-client": "aegir test -t browser --bail -f ./test/interface-message-port-client.js",
     "lint": "aegir lint",
-    "coverage": "npx nyc -r html npm run test:node -- --bail",
-    "clean": "rimraf ./dist",
-    "dep-check": "aegir dep-check -i ipfs-core -i rimraf -i ipfs-core-types -i esbuild"
+    "clean": "aegir clean",
+    "dep-check": "aegir dep-check -i ipfs-core -i ipfs-core-types -i esbuild"
   },
   "dependencies": {
     "browser-readablestream-to-it": "^1.0.1",
-    "cids": "^1.1.6",
-    "ipfs-core-types": "^0.5.1",
-    "ipfs-message-port-protocol": "^0.7.2",
-    "ipfs-unixfs": "^4.0.3"
+    "err-code": "^3.0.1",
+    "ipfs-core-types": "^0.11.1",
+    "ipfs-message-port-protocol": "^0.12.1",
+    "ipfs-unixfs": "^6.0.9",
+    "it-peekable": "^1.0.2",
+    "multiformats": "^9.5.1"
   },
   "devDependencies": {
-    "aegir": "^33.0.0",
-    "interface-ipfs-core": "^0.146.1",
-    "ipfs-core": "^0.7.1",
-    "ipfs-message-port-server": "^0.7.2",
-    "rimraf": "^3.0.2"
+    "aegir": "^37.0.11",
+    "interface-ipfs-core": "^0.155.2",
+    "ipfs-core": "^0.15.4",
+    "ipfs-message-port-server": "^0.12.1"
   },
   "engines": {
-    "node": ">=14.0.0",
+    "node": ">=15.0.0",
     "npm": ">=3.0.0"
   }
 }

@@ -1,34 +1,36 @@
-'use strict'
+import parseDuration from 'parse-duration'
+import { coerceUint8Array } from '../../utils.js'
 
-const { default: parseDuration } = require('parse-duration')
-const { coerceUint8Array } = require('../../utils')
+/**
+ * @typedef {object} Argv
+ * @property {import('../../types').Context} Argv.ctx
+ * @property {string} Argv.topic
+ * @property {Uint8Array} Argv.data
+ * @property {number} Argv.timeout
+ */
 
-module.exports = {
+/** @type {import('yargs').CommandModule<Argv, Argv>} */
+const command = {
   command: 'pub <topic> <data>',
 
   describe: 'Publish data to a topic',
 
   builder: {
     data: {
-      type: 'string',
+      string: true,
       coerce: coerceUint8Array
     },
     timeout: {
-      type: 'string',
+      string: true,
       coerce: parseDuration
     }
   },
 
-  /**
-   * @param {object} argv
-   * @param {import('../../types').Context} argv.ctx
-   * @param {string} argv.topic
-   * @param {Uint8Array} argv.data
-   * @param {number} argv.timeout
-   */
   async handler ({ ctx: { ipfs }, topic, data, timeout }) {
     await ipfs.pubsub.publish(topic, data, {
       timeout
     })
   }
 }
+
+export default command

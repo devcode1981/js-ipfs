@@ -32,7 +32,7 @@
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | topic | `String` | The topic name |
-| handler | `Function<(msg) => {}>` | Event handler which will be called with a message object everytime one is received. The `msg` has the format `{from: String, seqno: Uint8Array, data: Uint8Array, topicIDs: Array<String>}` |
+| handler | `Function<(msg) => {}>` | Event handler which will be called with a message object everytime one is received. The `msg` has the format `{from: PeerId, sequenceNumber: bigint, data: Uint8Array, topicIDs: Array<String>}` |
 
 ### Options
 
@@ -53,7 +53,7 @@ An optional object which may have the following keys:
 
 ```JavaScript
 const topic = 'fruit-of-the-day'
-const receiveMsg = (msg) => console.log(msg.data.toString())
+const receiveMsg = (msg) => console.log(new TextDecoder().decode(msg.data))
 
 await ipfs.pubsub.subscribe(topic, receiveMsg)
 console.log(`subscribed to ${topic}`)

@@ -1,8 +1,7 @@
-'use strict'
 
-// @ts-ignore
-const protocol = require('ipfs-grpc-protocol')
-const protobuf = require('protobufjs/light')
+import protocol from 'ipfs-grpc-protocol'
+import protobuf from 'protobufjs/light.js'
+
 const { Service } = protobuf
 
 const CONVERSION_OPTS = {
@@ -18,18 +17,18 @@ const CONVERSION_OPTS = {
  * by @improbable-eng/grpc-web.  This is to let us use the same
  * service definition on both the server and the client.
  */
-module.exports = function loadServices () {
-  // @ts-ignore - recent protobufjs release changed the types
+export function loadServices () {
+  // @ts-expect-error - recent protobufjs release changed the types
   const root = protobuf.Root.fromJSON(protocol)
   /** @type {Record<string, any>} */
   const output = {}
 
   Object
-    // @ts-ignore
+    // @ts-expect-error
     .keys(root.nested.ipfs)
-    // @ts-ignore
+    // @ts-expect-error
     .filter(key => root.nested.ipfs[key] instanceof Service)
-    // @ts-ignore
+    // @ts-expect-error
     .map(key => root.nested.ipfs[key])
     .forEach(service => {
       /** @type {Record<string, any>} */

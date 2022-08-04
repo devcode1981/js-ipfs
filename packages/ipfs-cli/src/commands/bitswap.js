@@ -1,14 +1,22 @@
-'use strict'
+import { commands } from './bitswap/index.js'
 
-module.exports = {
+/** @type {import('yargs').CommandModule} */
+const command = {
   command: 'bitswap <command>',
 
-  description: 'Interact with the bitswap agent.',
+  describe: 'Interact with the bitswap agent',
 
-  /**
-   * @param {import('yargs').Argv} yargs
-   */
   builder (yargs) {
-    return yargs.commandDir('bitswap')
+    commands.forEach(command => {
+      yargs.command(command)
+    })
+
+    return yargs
+  },
+
+  handler () {
+
   }
 }
+
+export default command

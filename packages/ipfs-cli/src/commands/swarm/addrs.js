@@ -1,29 +1,32 @@
-'use strict'
+import { commands } from './addrs/index.js'
+import parseDuration from 'parse-duration'
 
-const { default: parseDuration } = require('parse-duration')
+/**
+ * @typedef {object} Argv
+ * @property {import('../../types').Context} Argv.ctx
+ * @property {number} Argv.timeout
+ */
 
-module.exports = {
+/** @type {import('yargs').CommandModule<Argv, Argv>} */
+const command = {
   command: 'addrs',
 
   describe: '',
 
-  /**
-   * @param {import('yargs').Argv} yargs
-   */
   builder (yargs) {
-    return yargs
-      .commandDir('addrs')
+    commands.forEach(command => {
+      yargs.command(command)
+    })
+
+    yargs
       .option('timeout', {
-        type: 'string',
+        string: true,
         coerce: parseDuration
       })
+
+    return yargs
   },
 
-  /**
-   * @param {object} argv
-   * @param {import('../../types').Context} argv.ctx
-   * @param {number} argv.timeout
-   */
   async handler ({ ctx: { ipfs, print }, timeout }) {
     const res = await ipfs.swarm.addrs({
       timeout
@@ -37,7 +40,7 @@ module.exports = {
         let res
         try {
           res = addr.decapsulate('ipfs').toString()
-        } catch (_) {
+        } catch (/** @type {any} */ _) {
           // peer addresses dont need to have /ipfs/ as we know their peerId
           // and can encapsulate on dial.
           res = addr.toString()
@@ -52,3 +55,5 @@ module.exports = {
     print(output.join('\n'))
   }
 }
+
+export default command

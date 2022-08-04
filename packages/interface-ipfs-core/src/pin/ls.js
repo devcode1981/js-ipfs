@@ -1,26 +1,30 @@
 /* eslint-env mocha */
-'use strict'
 
-const { fixtures } = require('./utils')
-const { getDescribe, getIt, expect } = require('../utils/mocha')
-const all = require('it-all')
+import { fixtures } from './utils.js'
+import { expect } from 'aegir/chai'
+import { getDescribe, getIt } from '../utils/mocha.js'
+import all from 'it-all'
 
-/** @typedef { import("ipfsd-ctl/src/factory") } Factory */
 /**
- * @param {Factory} common
- * @param {Object} options
+ * @typedef {import('ipfsd-ctl').Factory} Factory
  */
-module.exports = (common, options) => {
+
+/**
+ * @param {Factory} factory
+ * @param {object} options
+ */
+export function testLs (factory, options) {
   const describe = getDescribe(options)
   const it = getIt(options)
 
   describe('.pin.ls', function () {
     this.timeout(50 * 1000)
 
+    /** @type {import('ipfs-core-types').IPFS} */
     let ipfs
 
     before(async () => {
-      ipfs = (await common.spawn()).api
+      ipfs = (await factory.spawn()).api
       // two files wrapped in directories, only root CID pinned recursively
       const dir = fixtures.directory.files.map((file) => ({ path: file.path, content: file.data }))
       await all(ipfs.addAll(dir, { pin: false, cidVersion: 0 }))
@@ -33,7 +37,7 @@ module.exports = (common, options) => {
       await ipfs.pin.add(fixtures.files[1].cid, { recursive: false })
     })
 
-    after(() => common.clean())
+    after(() => factory.clean())
 
     // 1st, because ipfs.add pins automatically
     it('should list all recursive pins', async () => {

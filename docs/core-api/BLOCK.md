@@ -39,18 +39,19 @@ An optional object which may have the following keys:
 | ---- | ---- | ------- | ----------- |
 | timeout | `Number` | `undefined` | A timeout in ms |
 | signal | [AbortSignal][] | `undefined` |  Can be used to cancel any long running requests started as a result of this call |
+| preload | `boolean` | `false` |  Whether to preload all blocks created during this operation |
 
 ### Returns
 
 | Type | Description |
 | -------- | -------- |
-| `Promise<Block>` | A [Block][block] type object, containing both the data and the hash of the block |
+| `Promise<Uint8Array>` | A Uint8Array containing the data of the block |
 
 ### Example
 
 ```JavaScript
 const block = await ipfs.block.get(cid)
-console.log(block.data)
+console.log(block)
 ```
 
 A great source of [examples][] can be found in the tests for this API.
@@ -63,7 +64,7 @@ A great source of [examples][] can be found in the tests for this API.
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| block | A `Uint8Array` or [Block][] instance | The block or data to store |
+| block | `Uint8Array` | The block of data to store |
 
 ### Options
 
@@ -71,22 +72,20 @@ An optional object which may have the following keys:
 
 | Name | Type | Default | Description |
 | ---- | ---- | ------- | ----------- |
-| cid  | [CID][] | `undefined` | A CID to store the block under |
 | format | `String` | `'dag-pb'` | The codec to use to create the CID |
 | mhtype | `String` | `sha2-256` | The hashing algorithm to use to create the CID |
-| mhlen | `Number` | | |
+| mhlen | `Number` | `undefined` | The hash length (only relevant for `go-ipfs`) |
 | version | `Number` | `0` |  The version to use to create the CID |
 | pin | `boolean` | `false` |  If true, pin added blocks recursively |
 | timeout | `Number` | `undefined` | A timeout in ms |
 | signal | [AbortSignal][] | `undefined` | Can be used to cancel any long running requests started as a result of this call |
-
-**Note:** If you pass a [`Block`][block] instance as the block parameter, you don't need to pass options, as the block instance will carry the CID value as a property.
+| preload | `boolean` | `false` |  Whether to preload all blocks created during this operation |
 
 ### Returns
 
 | Type | Description |
 | -------- | -------- |
-| `Promise<Block>` | A [Block][block] type object, containing both the data and the hash of the block |
+| `Promise<CID>` | A [CID][CID] type object containing the hash of the block |
 
 ### Example
 
@@ -96,20 +95,6 @@ const buf = new TextEncoder().encode('a serialized object')
 const decoder = new TextDecoder()
 
 const block = await ipfs.block.put(buf)
-
-console.log(decoder.decode(block.data))
-// Logs:
-// a serialized object
-console.log(block.cid.toString())
-// Logs:
-// the CID of the object
-
-// With custom format and hashtype through CID
-const CID = require('cids')
-const buf = new TextEncoder().encode('another serialized object')
-const cid = new CID(1, 'dag-pb', multihash)
-
-const block = await ipfs.block.put(blob, cid)
 
 console.log(decoder.decode(block.data))
 // Logs:
@@ -191,6 +176,7 @@ An optional object which may have the following keys:
 | ---- | ---- | ------- | ----------- |
 | timeout | `Number` | `undefined` | A timeout in ms |
 | signal | [AbortSignal][] | `undefined` | Can be used to cancel any long running requests started as a result of this call |
+| preload | `boolean` | `false` |  Whether to preload all blocks created during this operation |
 
 ### Returns
 
@@ -211,7 +197,7 @@ the returned object has the following keys:
 
 ```JavaScript
 const multihashStr = 'QmQULBtTjNcMwMr4VMNknnVv3RpytrLSdgpvMcTnfNhrBJ'
-const cid = new CID(multihashStr)
+const cid = CID.parse(multihashStr)
 
 const stats = await ipfs.block.stat(cid)
 console.log(stats.cid.toString())
@@ -226,4 +212,4 @@ A great source of [examples][] can be found in the tests for this API.
 [multihash]: https://github.com/multiformats/multihash
 [examples]: https://github.com/ipfs/js-ipfs/blob/master/packages/interface-ipfs-core/src/block
 [AbortSignal]: https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal
-[cid]: https://www.npmjs.com/package/cids
+[cid]: https://docs.ipfs.io/concepts/content-addressing

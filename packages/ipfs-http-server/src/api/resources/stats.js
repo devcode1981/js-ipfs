@@ -1,17 +1,13 @@
-'use strict'
+import map from 'it-map'
+import { pipe } from 'it-pipe'
+import { streamResponse } from '../../utils/stream-response.js'
+import Joi from '../../utils/joi.js'
 
-const { map } = require('streaming-iterables')
-const { pipe } = require('it-pipe')
-// @ts-ignore no types
-const ndjson = require('iterable-ndjson')
-const streamResponse = require('../../utils/stream-response')
-const Joi = require('../../utils/joi')
+export { statResource as bitswapResource } from './bitswap.js'
 
-exports.bitswap = require('./bitswap').stat
+export { statResource as repoResource } from './repo.js'
 
-exports.repo = require('./repo').stat
-
-exports.bw = {
+export const bwResource = {
   options: {
     validate: {
       options: {
@@ -19,7 +15,7 @@ exports.bw = {
         stripUnknown: true
       },
       query: Joi.object().keys({
-        peer: Joi.cid(),
+        peer: Joi.peerId(),
         proto: Joi.string(),
         poll: Joi.boolean().default(false),
         interval: Joi.string().default('1s'),
@@ -59,13 +55,14 @@ exports.bw = {
         signal,
         timeout
       }),
-      map(stat => ({
-        TotalIn: stat.totalIn.toString(),
-        TotalOut: stat.totalOut.toString(),
-        RateIn: stat.rateIn.toString(),
-        RateOut: stat.rateOut.toString()
-      })),
-      ndjson.stringify
+      async function * (source) {
+        yield * map(source, stat => ({
+          TotalIn: stat.totalIn.toString(),
+          TotalOut: stat.totalOut.toString(),
+          RateIn: stat.rateIn,
+          RateOut: stat.rateOut
+        }))
+      }
     ))
   }
 }

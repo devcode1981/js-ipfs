@@ -1,24 +1,24 @@
-'use strict'
+import parseDuration from 'parse-duration'
 
-const { default: parseDuration } = require('parse-duration')
+/**
+ * @typedef {object} Argv
+ * @property {import('../../../types').Context} Argv.ctx
+ * @property {number} Argv.timeout
+ */
 
-module.exports = {
+/** @type {import('yargs').CommandModule<Argv, Argv>} */
+const command = {
   command: 'state',
 
-  describe: 'Query the state of IPNS pubsub.',
+  describe: 'Query the state of IPNS pubsub',
 
   builder: {
     timeout: {
-      type: 'string',
+      string: true,
       coerce: parseDuration
     }
   },
 
-  /**
-   * @param {object} argv
-   * @param {import('../../../types').Context} argv.ctx
-   * @param {number} argv.timeout
-   */
   async handler ({ ctx: { ipfs, print }, timeout }) {
     const result = await ipfs.name.pubsub.state({
       timeout
@@ -26,3 +26,5 @@ module.exports = {
     print(result.enabled ? 'enabled' : 'disabled')
   }
 }
+
+export default command

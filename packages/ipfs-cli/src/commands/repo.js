@@ -1,15 +1,22 @@
-'use strict'
+import { commands } from './repo/index.js'
 
-module.exports = {
+/** @type {import('yargs').CommandModule} */
+const command = {
   command: 'repo <command>',
 
-  description: 'Manipulate the IPFS repo.',
+  describe: 'Manipulate the IPFS repo',
 
-  /**
-   * @param {import('yargs').Argv} yargs
-   */
   builder (yargs) {
+    commands.forEach(command => {
+      yargs.command(command)
+    })
+
     return yargs
-      .commandDir('repo')
+  },
+
+  handler () {
+
   }
 }
+
+export default command

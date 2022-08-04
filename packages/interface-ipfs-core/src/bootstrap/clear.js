@@ -1,15 +1,18 @@
 /* eslint-env mocha */
-'use strict'
 
-const { getDescribe, getIt, expect } = require('../utils/mocha')
-const { Multiaddr } = require('multiaddr')
+import { expect } from 'aegir/chai'
+import { getDescribe, getIt } from '../utils/mocha.js'
+import { Multiaddr } from '@multiformats/multiaddr'
 
-/** @typedef { import("ipfsd-ctl/src/factory") } Factory */
 /**
- * @param {Factory} common
- * @param {Object} options
+ * @typedef {import('ipfsd-ctl').Factory} Factory
  */
-module.exports = (common, options) => {
+
+/**
+ * @param {Factory} factory
+ * @param {object} options
+ */
+export function testClear (factory, options) {
   const describe = getDescribe(options)
   const it = getIt(options)
 
@@ -18,11 +21,12 @@ module.exports = (common, options) => {
   describe('.bootstrap.clear', function () {
     this.timeout(100 * 1000)
 
+    /** @type {import('ipfs-core-types').IPFS} */
     let ipfs
 
-    before(async () => { ipfs = (await common.spawn()).api })
+    before(async () => { ipfs = (await factory.spawn()).api })
 
-    after(() => common.clean())
+    after(() => factory.clean())
 
     it('should return a list containing the peer removed when called with a valid arg (ip4)', async () => {
       await ipfs.bootstrap.clear()

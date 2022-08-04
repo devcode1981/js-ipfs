@@ -1,8 +1,10 @@
-'use strict'
+import drain from 'it-drain'
 
-const drain = require('it-drain')
-
-module.exports = (fn) => {
+/**
+ * @param {*} fn
+ * @returns {Promise<void>}
+ */
+export default function testTimeout (fn) {
   return new Promise((resolve, reject) => {
     // some operations are either synchronous so cannot time out, or complete during
     // processing of the microtask queue so the timeout timer doesn't fire.  If this
@@ -15,7 +17,7 @@ module.exports = (fn) => {
         res = drain(res)
       }
 
-      res.then((result) => {
+      res.then((/** @type {*} */ result) => {
         const timeTaken = Date.now() - start
 
         if (timeTaken < 100) {
@@ -26,8 +28,8 @@ module.exports = (fn) => {
         }
 
         reject(new Error(`API call did not time out after ${timeTaken}ms, got ${JSON.stringify(result, null, 2)}`))
-      }, (err) => {
-        if (err.name === 'TimeoutError') {
+      }, (/** @type {Error} */ err) => {
+        if (err.toString().includes('Timeout')) {
           return resolve()
         }
 

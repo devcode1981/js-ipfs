@@ -1,41 +1,39 @@
-'use strict'
+import fs from 'fs'
+import concat from 'it-concat'
+import parseDuration from 'parse-duration'
+import { coerceCID } from '../../../utils.js'
 
-const fs = require('fs')
-const concat = require('it-concat')
-const multibase = require('multibase')
-const { cidToString } = require('ipfs-core-utils/src/cid')
-const { default: parseDuration } = require('parse-duration')
-const { coerceCID } = require('../../../utils')
+/**
+ * @typedef {object} Argv
+ * @property {import('../../../types').Context} Argv.ctx
+ * @property {import('multiformats/cid').CID} Argv.root
+ * @property {string} Argv.data
+ * @property {string} Argv.cidBase
+ * @property {number} Argv.timeout
+ */
 
-module.exports = {
+/** @type {import('yargs').CommandModule<Argv, Argv>} */
+const command = {
   command: 'set-data <root> [data]',
 
   describe: 'Set data field of an ipfs object',
 
   builder: {
     root: {
-      type: 'string',
+      string: true,
       coerce: coerceCID
     },
     'cid-base': {
-      describe: 'Number base to display CIDs in. Note: specifying a CID base for v0 CIDs will have no effect.',
-      type: 'string',
-      choices: Object.keys(multibase.names)
+      describe: 'Number base to display CIDs in. Note: specifying a CID base for v0 CIDs will have no effect',
+      string: true,
+      default: 'base58btc'
     },
     timeout: {
-      type: 'string',
+      string: true,
       coerce: parseDuration
     }
   },
 
-  /**
-   * @param {object} argv
-   * @param {import('../../../types').Context} argv.ctx
-   * @param {import('cids')} argv.root
-   * @param {string} argv.data
-   * @param {import('multibase').BaseName} argv.cidBase
-   * @param {number} argv.timeout
-   */
   async handler ({ ctx: { ipfs, print, getStdin }, root, data, cidBase, timeout }) {
     let buf
 
@@ -49,6 +47,10 @@ module.exports = {
       timeout
     })
 
-    print(cidToString(cid, { base: cidBase, upgrade: false }))
+    const base = await ipfs.bases.getBase(cidBase)
+
+    print(cid.toString(base.encoder))
   }
 }
+
+export default command

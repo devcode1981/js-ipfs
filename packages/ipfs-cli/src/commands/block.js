@@ -1,15 +1,22 @@
-'use strict'
+import { commands } from './block/index.js'
 
-module.exports = {
+/** @type {import('yargs').CommandModule} */
+const command = {
   command: 'block <command>',
 
-  description: 'Manipulate raw IPFS blocks.',
+  describe: 'Manipulate raw IPFS blocks',
 
-  /**
-   * @param {import('yargs').Argv} yargs
-   */
   builder (yargs) {
+    commands.forEach(command => {
+      yargs.command(command)
+    })
+
     return yargs
-      .commandDir('block')
+  },
+
+  handler () {
+
   }
 }
+
+export default command

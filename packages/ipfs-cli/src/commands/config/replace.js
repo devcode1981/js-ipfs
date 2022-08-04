@@ -1,27 +1,27 @@
-'use strict'
+import path from 'path'
+import fs from 'fs'
+import parseDuration from 'parse-duration'
 
-const path = require('path')
-const fs = require('fs')
-const { default: parseDuration } = require('parse-duration')
+/**
+ * @typedef {object} Argv
+ * @property {import('../../types').Context} Argv.ctx
+ * @property {string} Argv.file
+ * @property {number} Argv.timeout
+ */
 
-module.exports = {
+/** @type {import('yargs').CommandModule<Argv, Argv>} */
+const command = {
   command: 'replace <file>',
 
   describe: 'Replaces the config with <file>',
 
   builder: {
     timeout: {
-      type: 'string',
+      string: true,
       coerce: parseDuration
     }
   },
 
-  /**
-   * @param {object} argv
-   * @param {import('../../types').Context} argv.ctx
-   * @param {string} argv.file
-   * @param {number} argv.timeout
-   */
   handler ({ ctx: { ipfs, isDaemon }, file, timeout }) {
     const filePath = path.resolve(process.cwd(), file)
 
@@ -34,3 +34,5 @@ module.exports = {
     })
   }
 }
+
+export default command

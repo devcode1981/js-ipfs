@@ -8,10 +8,6 @@
 
 > A test suite and interface you can use to implement an IPFS core interface.
 
-## Lead Maintainer <!-- omit in toc -->
-
-[Alex Potsides](http://github.com/achingbrain)
-
 ## Table of Contents <!-- omit in toc -->
 
 - [Background](#background)
@@ -66,7 +62,7 @@ In JavaScript land:
 $ npm install interface-ipfs-core
 ```
 
-If you want to run these tests against a go-ipfs daemon, checkout [ipfs-http-client](https://github.com/ipfs/js-ipfs-http-client) and run test tests:
+If you want to run these tests against a Kubo daemon, checkout [ipfs-http-client](https://github.com/ipfs/js-ipfs-http-client) and run test tests:
 
 ```console
 $ git clone https://github.com/ipfs/js-ipfs-http-client
@@ -79,7 +75,7 @@ $ npm test
 Install `interface-ipfs-core` as one of the dependencies of your project and as a test file. Then, using `mocha` (for Node.js) or a test runner with compatible API, do:
 
 ```js
-const tests = require('interface-ipfs-core')
+import * as tests from 'interface-ipfs-core'
 const nodes = []
 
 // Create common setup and teardown

@@ -1,13 +1,9 @@
-'use strict'
+import Joi from '../../utils/joi.js'
+import { pipe } from 'it-pipe'
+import map from 'it-map'
+import { streamResponse } from '../../utils/stream-response.js'
 
-const Joi = require('../../utils/joi')
-const { pipe } = require('it-pipe')
-const { map } = require('streaming-iterables')
-// @ts-ignore no types
-const ndjson = require('iterable-ndjson')
-const streamResponse = require('../../utils/stream-response')
-
-module.exports = {
+export const pingResource = {
   options: {
     validate: {
       options: {
@@ -16,7 +12,7 @@ module.exports = {
       },
       query: Joi.object().keys({
         count: Joi.number().integer().greater(0).default(10),
-        peerId: Joi.cid().required(),
+        peerId: Joi.peerId().required(),
         timeout: Joi.timeout()
       })
         .rename('arg', 'peerId', {
@@ -56,8 +52,9 @@ module.exports = {
         signal,
         timeout
       }),
-      map(pong => ({ Success: pong.success, Time: pong.time, Text: pong.text })),
-      ndjson.stringify
+      async function * (source) {
+        yield * map(source, pong => ({ Success: pong.success, Time: pong.time, Text: pong.text }))
+      }
     ))
   }
 }

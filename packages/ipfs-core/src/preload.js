@@ -1,24 +1,15 @@
-'use strict'
+import { multiaddrToUri } from '@multiformats/multiaddr-to-uri'
+import { logger } from '@libp2p/logger'
+import shuffle from 'array-shuffle'
+import { preload } from 'ipfs-core-config/preload'
+import hashlru from 'hashlru'
 
-// @ts-ignore no types
-const toUri = require('multiaddr-to-uri')
-const debug = require('debug')
-const shuffle = require('array-shuffle')
-const { AbortController } = require('native-abort-controller')
-const preload = require('./runtime/preload-nodejs')
-/** @type {typeof import('hashlru').default} */
-// @ts-ignore - hashlru has incorrect typedefs
-const hashlru = require('hashlru')
-
-const log = Object.assign(
-  debug('ipfs:preload'),
-  { error: debug('ipfs:preload:error') }
-)
+const log = logger('ipfs:preload')
 
 /**
  * @param {import('./types').PreloadOptions} [options]
  */
-const createPreloader = (options = {}) => {
+export function createPreloader (options = {}) {
   options.enabled = Boolean(options.enabled)
   options.addresses = options.addresses || []
   options.cache = options.cache || 1000
@@ -35,7 +26,7 @@ const createPreloader = (options = {}) => {
   let stopped = true
   /** @type {AbortController[]} */
   let requests = []
-  const apiUris = options.addresses.map(toUri)
+  const apiUris = options.addresses.map((str) => multiaddrToUri(str))
 
   // Avoid preloading the same CID over and over again
   const cache = hashlru(options.cache)
@@ -73,7 +64,7 @@ const createPreloader = (options = {}) => {
           requests = requests.concat(controller)
           await preload(`${uri}/api/v0/refs?r=true&arg=${encodeURIComponent(path)}`, { signal: controller.signal })
           success = true
-        } catch (err) {
+        } catch (/** @type {any} */ err) {
           if (err.type !== 'aborted') log.error(err)
         } finally {
           requests = requests.filter(r => r !== controller)
@@ -83,7 +74,7 @@ const createPreloader = (options = {}) => {
       }
 
       log(`${success ? '' : 'un'}successfully preloaded ${path} in ${Date.now() - now}ms`)
-    } catch (err) {
+    } catch (/** @type {any} */ err) {
       log.error(err)
     }
   }
@@ -107,5 +98,3 @@ const createPreloader = (options = {}) => {
 
   return api
 }
-
-module.exports = createPreloader

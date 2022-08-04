@@ -1,9 +1,9 @@
 /* eslint-env mocha */
-'use strict'
 
-const { expect } = require('aegir/utils/chai')
-const ipfsClient = require('../../src').create
-const delay = require('delay')
+import { expect } from 'aegir/chai'
+import delay from 'delay'
+import { create as httpClient } from '../../src/index.js'
+import http, { Agent } from 'http'
 
 /**
  * @typedef {import('http').IncomingMessage} IncomingMessage
@@ -13,7 +13,7 @@ const delay = require('delay')
 function startServer (handler) {
   return new Promise((resolve) => {
     // spin up a test http server to inspect the requests made by the library
-    const server = require('http').createServer((req, res) => {
+    const server = http.createServer((req, res) => {
       req.on('data', () => {})
       req.on('end', async () => {
         const out = await handler(req)
@@ -40,8 +40,6 @@ describe('agent', function () {
   let agent
 
   before(() => {
-    const { Agent } = require('http')
-
     agent = new Agent({
       maxSockets: 2
     })
@@ -59,7 +57,7 @@ describe('agent', function () {
       return p
     })
 
-    const ipfs = ipfsClient({
+    const ipfs = httpClient({
       url: `http://localhost:${server.port}`,
       agent
     })
@@ -83,10 +81,12 @@ describe('agent', function () {
 
         // respond to the in-flight requests
         responses[0]({
-          res: 0
+          res: 0,
+          id: 'QmfGBRT6BbWJd7yUc2uYdaUZJBbnEFvTqehPFoSMQ6wgdr'
         })
         responses[1]({
-          res: 1
+          res: 1,
+          id: 'QmfGBRT6BbWJd7yUc2uYdaUZJBbnEFvTqehPFoSMQ6wgdr'
         })
 
         break
@@ -105,22 +105,18 @@ describe('agent', function () {
       if (responses.length === 3) {
         // respond to it
         responses[2]({
-          res: 2
+          res: 2,
+          id: 'QmfGBRT6BbWJd7yUc2uYdaUZJBbnEFvTqehPFoSMQ6wgdr'
         })
       }
     }
 
-    const results = await requests
+    let results = await requests
+    results = results.map(r => r.res)
     expect(results).to.have.lengthOf(3)
-    expect(results).to.deep.include({
-      res: 0
-    })
-    expect(results).to.deep.include({
-      res: 1
-    })
-    expect(results).to.deep.include({
-      res: 2
-    })
+    expect(results).to.include(0)
+    expect(results).to.include(1)
+    expect(results).to.include(2)
 
     server.close()
   })

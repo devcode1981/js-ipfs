@@ -1,13 +1,10 @@
-'use strict'
+import Joi from '../../utils/joi.js'
+import map from 'it-map'
+import filter from 'it-filter'
+import { pipe } from 'it-pipe'
+import { streamResponse } from '../../utils/stream-response.js'
 
-const Joi = require('../../utils/joi')
-const { map, filter } = require('streaming-iterables')
-const { pipe } = require('it-pipe')
-// @ts-ignore no types
-const ndjson = require('iterable-ndjson')
-const streamResponse = require('../../utils/stream-response')
-
-exports.gc = {
+export const gcResource = {
   options: {
     validate: {
       options: {
@@ -49,17 +46,20 @@ exports.gc = {
         signal,
         timeout
       }),
-      filter(r => !r.err || streamErrors),
-      map(r => ({
-        Error: (r.err && r.err.message) || undefined,
-        Key: (!r.err && { '/': r.cid.toString() }) || undefined
-      })),
-      ndjson.stringify
+      async function * filterErrors (source) {
+        yield * filter(source, r => !r.err || streamErrors)
+      },
+      async function * transformGcOutput (source) {
+        yield * map(source, r => ({
+          Error: (r.err && r.err.message) || undefined,
+          Key: (!r.err && { '/': r.cid.toString() }) || undefined
+        }))
+      }
     ))
   }
 }
 
-exports.version = {
+export const versionResource = {
   options: {
     validate: {
       options: {
@@ -100,7 +100,7 @@ exports.version = {
   }
 }
 
-exports.stat = {
+export const statResource = {
   options: {
     validate: {
       options: {

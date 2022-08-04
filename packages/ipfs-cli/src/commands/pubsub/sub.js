@@ -1,28 +1,32 @@
-'use strict'
+import parseDuration from 'parse-duration'
 
-const { default: parseDuration } = require('parse-duration')
+/**
+ * @typedef {import('@libp2p/interfaces/pubsub').Message} Message
+ */
 
-module.exports = {
+/**
+ * @typedef {object} Argv
+ * @property {import('../../types').Context} Argv.ctx
+ * @property {string} Argv.topic
+ * @property {number} Argv.timeout
+ */
+
+/** @type {import('yargs').CommandModule<Argv, Argv>} */
+const command = {
   command: 'sub <topic>',
 
   describe: 'Subscribe to a topic',
 
   builder: {
     timeout: {
-      type: 'string',
+      string: true,
       coerce: parseDuration
     }
   },
 
-  /**
-   * @param {object} argv
-   * @param {import('../../types').Context} argv.ctx
-   * @param {string} argv.topic
-   * @param {number} argv.timeout
-   */
   async handler ({ ctx: { ipfs, print }, topic, timeout }) {
     /**
-     * @type {import('ipfs-core-types/src/pubsub').MessageHandlerFn}
+     * @type {import('@libp2p/interfaces/events').EventHandler<Message>}
      */
     const handler = msg => print(msg.data.toString())
     await ipfs.pubsub.subscribe(topic, handler, {
@@ -30,3 +34,5 @@ module.exports = {
     })
   }
 }
+
+export default command

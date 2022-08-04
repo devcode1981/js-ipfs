@@ -1,52 +1,53 @@
-'use strict'
+import { logger } from '@libp2p/logger'
+import parseDuration from 'parse-duration'
+import { importKey, unmarshalPrivateKey } from '@libp2p/crypto/keys'
+import errcode from 'err-code'
+import { fromString as uint8ArrayFromString } from 'uint8arrays/from-string'
+import { toString as uint8ArrayToString } from 'uint8arrays/to-string'
+import { OFFLINE_ERROR, normalizePath } from '../../utils.js'
+import { withTimeoutOption } from 'ipfs-core-utils/with-timeout-option'
+import { resolvePath } from './utils.js'
+import { peerIdFromKeys } from '@libp2p/peer-id'
 
-const debug = require('debug')
-const { default: parseDuration } = require('parse-duration')
-const crypto = require('libp2p-crypto')
-const errcode = require('err-code')
-const uint8ArrayFromString = require('uint8arrays/from-string')
-const uint8ArrayToString = require('uint8arrays/to-string')
-
-const log = Object.assign(debug('ipfs:name:publish'), {
-  error: debug('ipfs:name:publish:error')
-})
-
-const { OFFLINE_ERROR, normalizePath } = require('../../utils')
-const withTimeoutOption = require('ipfs-core-utils/src/with-timeout-option')
-const { resolvePath } = require('./utils')
+const log = logger('ipfs:name:publish')
 
 /**
  * IPNS - Inter-Planetary Naming System
  *
- * @param {Object} config
- * @param {import('../ipns')} config.ipns
- * @param {import('ipld')} config.ipld
- * @param {import('peer-id')} config.peerId
- * @param {import('ipfs-core-types/src/root').API["isOnline"]} config.isOnline
- * @param {import('libp2p/src/keychain')} config.keychain
+ * @param {object} config
+ * @param {import('../ipns').IPNSAPI} config.ipns
+ * @param {import('ipfs-repo').IPFSRepo} config.repo
+ * @param {import('ipfs-core-utils/multicodecs').Multicodecs} config.codecs
+ * @param {import('@libp2p/interfaces/peer-id').PeerId} config.peerId
+ * @param {import('ipfs-core-types/src/root').API<{}>["isOnline"]} config.isOnline
+ * @param {import('@libp2p/interfaces/keychain').KeyChain} config.keychain
  */
-module.exports = ({ ipns, ipld, peerId, isOnline, keychain }) => {
+export function createPublish ({ ipns, repo, codecs, peerId, isOnline, keychain }) {
   /**
    * @param {string} keyName
    */
   const lookupKey = async keyName => {
-    if (keyName === 'self') {
-      return peerId.privKey
+    /** @type {import('@libp2p/interfaces/keys').PrivateKey} */
+    let privateKey
+
+    if (keyName === 'self' && peerId.privateKey != null) {
+      privateKey = await unmarshalPrivateKey(peerId.privateKey)
+    } else {
+      try {
+        // We're exporting and immediately importing the key, so we can just use a throw away password
+        const pem = await keychain.exportKey(keyName, 'temp')
+        privateKey = await importKey(pem, 'temp')
+      } catch (/** @type {any} */ err) {
+        log.error(err)
+        throw errcode(err, 'ERR_CANNOT_GET_KEY')
+      }
     }
 
-    try {
-      // We're exporting and immediately importing the key, so we can just use a throw away password
-      const pem = await keychain.exportKey(keyName, 'temp')
-      const privateKey = await crypto.keys.import(pem, 'temp')
-      return privateKey
-    } catch (err) {
-      log.error(err)
-      throw errcode(err, 'ERR_CANNOT_GET_KEY')
-    }
+    return peerIdFromKeys(privateKey.public.bytes, privateKey.bytes)
   }
 
   /**
-   * @type {import('ipfs-core-types/src/name').API["publish"]}
+   * @type {import('ipfs-core-types/src/name').API<{}>["publish"]}
    */
   async function publish (value, options = {}) {
     const resolve = !(options.resolve === false)
@@ -61,7 +62,7 @@ module.exports = ({ ipns, ipld, peerId, isOnline, keychain }) => {
     // Normalize path value
     try {
       value = normalizePath(value)
-    } catch (err) {
+    } catch (/** @type {any} */ err) {
       log.error(err)
       throw err
     }
@@ -72,7 +73,7 @@ module.exports = ({ ipns, ipld, peerId, isOnline, keychain }) => {
 
       // Calculate lifetime with nanoseconds precision
       pubLifetime = parseFloat(pubLifetime.toFixed(6))
-    } catch (err) {
+    } catch (/** @type {any} */ err) {
       log.error(err)
       throw err
     }
@@ -82,7 +83,7 @@ module.exports = ({ ipns, ipld, peerId, isOnline, keychain }) => {
       // verify if the path exists, if not, an error will stop the execution
       lookupKey(key),
       // if resolving, do a get so we make sure we have the blocks
-      resolve ? resolvePath({ ipns, ipld }, value) : Promise.resolve()
+      resolve ? resolvePath({ ipns, repo, codecs }, value) : Promise.resolve()
     ])
 
     const bytes = uint8ArrayFromString(value)

@@ -1,15 +1,26 @@
-'use strict'
+import { commands } from './patch/index.js'
 
-module.exports = {
+/**
+ * @typedef {import('yargs').Argv} Argv
+ */
+
+/** @type {import('yargs').CommandModule<Argv, Argv>} */
+const command = {
   command: 'patch',
 
-  description: 'Create a new merkledag object based on an existing one.',
+  describe: 'Create a new merkledag object based on an existing one',
 
-  /**
-   * @param {import('yargs').Argv} yargs
-   */
   builder (yargs) {
+    commands.forEach(command => {
+      yargs.command(command)
+    })
+
     return yargs
-      .commandDir('patch')
+  },
+
+  handler () {
+
   }
 }
+
+export default command

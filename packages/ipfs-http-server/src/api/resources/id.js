@@ -1,8 +1,6 @@
-'use strict'
+import Joi from '../../utils/joi.js'
 
-const Joi = require('../../utils/joi')
-
-module.exports = {
+export const idResource = {
   options: {
     validate: {
       options: {
@@ -11,7 +9,7 @@ module.exports = {
       },
       query: Joi.object().keys({
         timeout: Joi.timeout(),
-        peerId: Joi.string()
+        peerId: Joi.peerId()
       })
         .rename('arg', 'peerId', {
           override: true,
@@ -45,7 +43,7 @@ module.exports = {
       peerId
     })
     return h.response({
-      ID: id.id,
+      ID: id.id.toString(),
       PublicKey: id.publicKey,
       Addresses: id.addresses,
       AgentVersion: id.agentVersion,

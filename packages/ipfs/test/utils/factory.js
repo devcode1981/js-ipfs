@@ -1,19 +1,38 @@
-'use strict'
-const { createFactory } = require('ipfsd-ctl')
-const merge = require('merge-options')
-const { isNode, isBrowser } = require('ipfs-utils/src/env')
+import { createFactory } from 'ipfsd-ctl'
+import mergeOpts from 'merge-options'
+import { isNode, isBrowser } from 'ipfs-utils/src/env.js'
+import * as ipfsHttpModule from 'ipfs-http-client'
+import * as ipfsModule from 'ipfs-core'
+// @ts-expect-error no types
+import goIpfs from 'go-ipfs'
+import path, { dirname } from 'path'
+import { fileURLToPath } from 'url'
+import { WebSockets } from '@libp2p/websockets'
+import { all as WebSocketsFiltersAll } from '@libp2p/websockets/filters'
+
+const merge = mergeOpts.bind({ ignoreUndefined: true })
+let __dirname = ''
+
+if (isNode) {
+  __dirname = dirname(fileURLToPath(import.meta.url))
+}
 
 const commonOptions = {
   test: true,
   type: 'proc',
-  ipfsHttpModule: require('ipfs-http-client'),
-  ipfsModule: require('ipfs-core'),
+  ipfsHttpModule,
+  ipfsModule,
   ipfsOptions: {
     pass: 'ipfs-is-awesome-software',
     libp2p: {
       dialer: {
         dialTimeout: 60e3 // increase timeout because travis is slow
-      }
+      },
+      transports: [
+        new WebSockets({
+          filter: WebSocketsFiltersAll
+        })
+      ]
     }
   },
   endpoint: process.env.IPFSD_SERVER
@@ -23,7 +42,7 @@ const commonOverrides = {
   js: {
     ...(isNode
       ? {
-          ipfsBin: require.resolve('../../src/cli.js')
+          ipfsBin: path.resolve(path.join(__dirname, '../../src/cli.js'))
         }
       : {}),
     ...(isBrowser
@@ -48,15 +67,13 @@ const commonOverrides = {
       : {})
   },
   go: {
-    ipfsBin: isNode ? require('go-ipfs').path() : undefined
+    ipfsBin: isNode ? goIpfs.path() : undefined
   }
 }
 
-const factory = (options = {}, overrides = {}) => {
+export const factory = (options = {}, overrides = {}) => {
   return createFactory(
     merge(commonOptions, options),
     merge(commonOverrides, overrides)
   )
 }
-
-module.exports = factory

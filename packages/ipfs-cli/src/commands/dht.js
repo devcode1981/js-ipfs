@@ -1,14 +1,22 @@
-'use strict'
+import { commands } from './dht/index.js'
 
-module.exports = {
+/** @type {import('yargs').CommandModule} */
+const command = {
   command: 'dht <command>',
 
-  description: 'Issue commands directly through the DHT.',
+  describe: 'Issue commands directly through the DHT',
 
-  /**
-   * @param {import('yargs').Argv} yargs
-   */
   builder (yargs) {
-    return yargs.commandDir('dht')
+    commands.forEach(command => {
+      yargs.command(command)
+    })
+
+    return yargs
+  },
+
+  handler () {
+
   }
 }
+
+export default command

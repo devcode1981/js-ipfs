@@ -1,15 +1,22 @@
-'use strict'
+import { commands } from './swarm/index.js'
 
-module.exports = {
+/** @type {import('yargs').CommandModule} */
+const command = {
   command: 'swarm <command>',
 
-  description: 'Swarm inspection tool.',
+  describe: 'Swarm inspection tool',
 
-  /**
-   * @param {import('yargs').Argv} yargs
-   */
   builder (yargs) {
+    commands.forEach(command => {
+      yargs.command(command)
+    })
+
     return yargs
-      .commandDir('swarm')
+  },
+
+  handler () {
+
   }
 }
+
+export default command

@@ -1,4 +1,4 @@
-'use strict'
+import { commands } from './name/index.js'
 
 /*
 IPNS is a PKI namespace, where names are the hashes of public keys, and
@@ -6,15 +6,23 @@ the private key enables publishing new (signed) values. In both publish
 and resolve, the default name used is the node's own PeerID,
 which is the hash of its public key.
 */
-module.exports = {
+/** @type {import('yargs').CommandModule} */
+const command = {
   command: 'name <command>',
 
-  description: 'Publish and resolve IPNS names.',
+  describe: 'Publish and resolve IPNS names',
 
-  /**
-   * @param {import('yargs').Argv} yargs
-   */
   builder (yargs) {
-    return yargs.commandDir('name')
+    commands.forEach(command => {
+      yargs.command(command)
+    })
+
+    return yargs
+  },
+
+  handler () {
+
   }
 }
+
+export default command

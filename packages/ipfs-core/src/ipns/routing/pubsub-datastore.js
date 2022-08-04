@@ -1,23 +1,22 @@
-'use strict'
+import { namespaceLength, namespace, peerIdToRoutingKey } from 'ipns'
+import { ipnsValidator } from 'ipns/validator'
+import { ipnsSelector } from 'ipns/selector'
+import { base58btc } from 'multiformats/bases/base58'
+import { PubSubDatastore } from 'datastore-pubsub'
+import { fromString as uint8ArrayFromString } from 'uint8arrays/from-string'
+import { toString as uint8ArrayToString } from 'uint8arrays/to-string'
+import errcode from 'err-code'
+import { logger } from '@libp2p/logger'
+import { peerIdFromString } from '@libp2p/peer-id'
 
-const ipns = require('ipns')
-const { toB58String } = require('multihashing-async').multihash
-const PubsubDatastore = require('datastore-pubsub')
-const uint8ArrayToString = require('uint8arrays/to-string')
-const uint8ArrayFromString = require('uint8arrays/from-string')
-
-const errcode = require('err-code')
-const debug = require('debug')
-const log = Object.assign(debug('ipfs:ipns:pubsub'), {
-  error: debug('ipfs:ipns:pubsub:error')
-})
+const log = logger('ipfs:ipns:pubsub')
 
 // Pubsub datastore aims to manage the pubsub subscriptions for IPNS
-class IpnsPubsubDatastore {
+export class IpnsPubsubDatastore {
   /**
-   * @param {import('libp2p-interfaces/src/pubsub')} pubsub
+   * @param {import('@libp2p/interfaces/pubsub').PubSub} pubsub
    * @param {import('interface-datastore').Datastore} localDatastore
-   * @param {import('peer-id')} peerId
+   * @param {import('@libp2p/interfaces/peer-id').PeerId} peerId
    */
   constructor (pubsub, localDatastore, peerId) {
     /** @type {Record<string, string>} */
@@ -26,8 +25,7 @@ class IpnsPubsubDatastore {
     // Bind _handleSubscriptionKey function, which is called by PubsubDatastore.
     this._handleSubscriptionKey = this._handleSubscriptionKey.bind(this)
 
-    // @ts-ignore will be fixed by https://github.com/ipfs/js-datastore-pubsub/pull/74
-    this._pubsubDs = new PubsubDatastore(pubsub, localDatastore, peerId, ipns.validator, this._handleSubscriptionKey)
+    this._pubsubDs = new PubSubDatastore(pubsub, localDatastore, peerId, ipnsValidator, ipnsSelector, this._handleSubscriptionKey)
   }
 
   /**
@@ -36,9 +34,13 @@ class IpnsPubsubDatastore {
    * @param {Uint8Array} key - identifier of the value.
    * @param {Uint8Array} value - value to be stored.
    */
-  put (key, value) {
-    // @ts-ignore datastores take Key keys, this one takes Uint8Array keys
-    return this._pubsubDs.put(key, value)
+  async put (key, value) {
+    try {
+      await this._pubsubDs.put(key, value)
+    } catch (/** @type {any} */ err) {
+      log.error(err)
+      throw err
+    }
   }
 
   /**
@@ -53,18 +55,17 @@ class IpnsPubsubDatastore {
     let err
 
     try {
-      // @ts-ignore datastores take Key keys, this one takes Uint8Array keys
       res = await this._pubsubDs.get(key)
-    } catch (e) {
+    } catch (/** @type {any} */ e) {
       err = e
     }
 
     // Add topic subscribed
-    const ns = key.slice(0, ipns.namespaceLength)
+    const ns = key.slice(0, namespaceLength)
 
-    if (uint8ArrayToString(ns) === ipns.namespace) {
-      const stringifiedTopic = toB58String(key)
-      const id = toB58String(key.slice(ipns.namespaceLength))
+    if (uint8ArrayToString(ns) === namespace) {
+      const stringifiedTopic = base58btc.encode(key).substring(1)
+      const id = base58btc.encode(key.slice(namespaceLength)).substring(1)
 
       this._subscriptions[stringifiedTopic] = id
 
@@ -95,15 +96,13 @@ class IpnsPubsubDatastore {
       throw errcode(new Error(`key ${key} does not correspond to a subscription`), 'ERR_INVALID_KEY')
     }
 
-    let keys
     try {
-      keys = ipns.getIdKeys(uint8ArrayFromString(subscriber, 'base58btc'))
-    } catch (err) {
+      const k = peerIdToRoutingKey(peerIdFromString(subscriber))
+      return k
+    } catch (/** @type {any} */ err) {
       log.error(err)
       throw err
     }
-
-    return keys.routingKey.uint8Array()
   }
 
   /**
@@ -112,7 +111,7 @@ class IpnsPubsubDatastore {
   getSubscriptions () {
     const subscriptions = Object.values(this._subscriptions).filter(Boolean)
 
-    return subscriptions.map((sub) => `${ipns.namespace}${sub}`)
+    return subscriptions.map((sub) => `${namespace}${sub}`)
   }
 
   /**
@@ -126,8 +125,8 @@ class IpnsPubsubDatastore {
     }
 
     // Trim /ipns/ prefix from the name
-    if (name.startsWith(ipns.namespace)) {
-      name = name.substring(ipns.namespaceLength)
+    if (name.startsWith(namespace)) {
+      name = name.substring(namespaceLength)
     }
 
     const stringifiedTopic = Object.keys(this._subscriptions).find((key) => this._subscriptions[key] === name)
@@ -152,5 +151,3 @@ class IpnsPubsubDatastore {
     }
   }
 }
-
-module.exports = IpnsPubsubDatastore

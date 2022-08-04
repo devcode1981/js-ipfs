@@ -1,31 +1,37 @@
-'use strict'
+import parseDuration from 'parse-duration'
+import { coercePeerId } from '../utils.js'
 
-const { default: parseDuration } = require('parse-duration')
+/**
+ * @typedef {object} Argv
+ * @property {import('../types').Context} Argv.ctx
+ * @property {number} Argv.count
+ * @property {import('@libp2p/interfaces/peer-id').PeerId} Argv.peerId
+ * @property {number} Argv.timeout
+ */
 
-module.exports = {
+/** @type {import('yargs').CommandModule<Argv, Argv>} */
+const command = {
   command: 'ping <peerId>',
 
-  description: 'Measure the latency of a connection',
+  describe: 'Measure the latency of a connection',
 
   builder: {
+    peerId: {
+      describe: 'Specify which peer to ping',
+      string: true,
+      coerce: coercePeerId
+    },
     count: {
       alias: 'n',
-      type: 'integer',
+      number: true,
       default: 10
     },
     timeout: {
-      type: 'string',
+      string: true,
       coerce: parseDuration
     }
   },
 
-  /**
-   * @param {object} argv
-   * @param {import('../types').Context} argv.ctx
-   * @param {number} argv.count
-   * @param {string} argv.peerId
-   * @param {number} argv.timeout
-   */
   async handler ({ ctx: { ipfs, print }, count, peerId, timeout }) {
     for await (const pong of ipfs.ping(peerId, { count, timeout })) {
       const { success, time, text } = pong
@@ -39,3 +45,5 @@ module.exports = {
     }
   }
 }
+
+export default command

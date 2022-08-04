@@ -1,41 +1,39 @@
-'use strict'
+import concat from 'it-concat'
+import fs from 'fs'
+import parseDuration from 'parse-duration'
+import { coerceCID } from '../../../utils.js'
 
-const concat = require('it-concat')
-const fs = require('fs')
-const multibase = require('multibase')
-const { cidToString } = require('ipfs-core-utils/src/cid')
-const { default: parseDuration } = require('parse-duration')
-const { coerceCID } = require('../../../utils')
+/**
+ * @typedef {object} Argv
+ * @property {import('../../../types').Context} Argv.ctx
+ * @property {import('multiformats/cid').CID} Argv.root
+ * @property {string} Argv.data
+ * @property {string} Argv.cidBase
+ * @property {number} Argv.timeout
+ */
 
-module.exports = {
+/** @type {import('yargs').CommandModule<Argv, Argv>} */
+const command = {
   command: 'append-data <root> [data]',
 
   describe: 'Append data to the data segment of a dag node',
 
   builder: {
     root: {
-      type: 'string',
+      string: true,
       coerce: coerceCID
     },
     'cid-base': {
-      describe: 'Number base to display CIDs in. Note: specifying a CID base for v0 CIDs will have no effect.',
-      type: 'string',
-      choices: Object.keys(multibase.names)
+      describe: 'Number base to display CIDs in. Note: specifying a CID base for v0 CIDs will have no effect',
+      string: true,
+      default: 'base58btc'
     },
     timeout: {
-      type: 'string',
+      string: true,
       coerce: parseDuration
     }
   },
 
-  /**
-   * @param {object} argv
-   * @param {import('../../../types').Context} argv.ctx
-   * @param {import('cids')} argv.root
-   * @param {string} argv.data
-   * @param {import('multibase').BaseName} argv.cidBase
-   * @param {number} argv.timeout
-   */
   async handler ({ ctx: { ipfs, print, getStdin }, root, data, cidBase, timeout }) {
     let buf
 
@@ -48,7 +46,10 @@ module.exports = {
     const cid = await ipfs.object.patch.appendData(root, buf, {
       timeout
     })
+    const base = await ipfs.bases.getBase(cidBase)
 
-    print(cidToString(cid, { base: cidBase, upgrade: false }))
+    print(cid.toString(base.encoder))
   }
 }
+
+export default command

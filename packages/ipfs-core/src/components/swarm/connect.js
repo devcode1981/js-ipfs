@@ -1,18 +1,16 @@
-'use strict'
-
-const withTimeoutOption = require('ipfs-core-utils/src/with-timeout-option')
+import { withTimeoutOption } from 'ipfs-core-utils/with-timeout-option'
 
 /**
- * @param {Object} config
+ * @param {object} config
  * @param {import('../../types').NetworkService} config.network
  */
-module.exports = ({ network }) => {
+export function createConnect ({ network }) {
   /**
-   * @type {import('ipfs-core-types/src/swarm').API["connect"]}
+   * @type {import('ipfs-core-types/src/swarm').API<{}>["connect"]}
    */
-  async function connect (addr, options = {}) {
+  async function connect (multiaddrOrPeerId, options = {}) {
     const { libp2p } = await network.use(options)
-    await libp2p.dial(addr, options)
+    await libp2p.dial(multiaddrOrPeerId, options)
   }
 
   return withTimeoutOption(connect)

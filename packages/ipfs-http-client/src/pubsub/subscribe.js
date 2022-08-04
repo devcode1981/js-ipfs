@@ -1,49 +1,49 @@
-'use strict'
-
-const uint8ArrayFromString = require('uint8arrays/from-string')
-const uint8ArrayToString = require('uint8arrays/to-string')
-const log = require('debug')('ipfs-http-client:pubsub:subscribe')
-const SubscriptionTracker = require('./subscription-tracker')
-const configure = require('../lib/configure')
-const toUrlSearchParams = require('../lib/to-url-search-params')
+import { logger } from '@libp2p/logger'
+import { configure } from '../lib/configure.js'
+import { toUrlSearchParams } from '../lib/to-url-search-params.js'
+import { textToUrlSafeRpc, rpcToText, rpcToBytes, rpcToBigInt } from '../lib/http-rpc-wire-format.js'
+import { peerIdFromString } from '@libp2p/peer-id'
+const log = logger('ipfs-http-client:pubsub:subscribe')
 
 /**
  * @typedef {import('../types').HTTPClientExtraOptions} HTTPClientExtraOptions
- * @typedef {import('ipfs-core-types/src/pubsub').Message} Message
+ * @typedef {import('@libp2p/interfaces/pubsub').Message} Message
  * @typedef {(err: Error, fatal: boolean, msg?: Message) => void} ErrorHandlerFn
  * @typedef {import('ipfs-core-types/src/pubsub').API<HTTPClientExtraOptions & { onError?: ErrorHandlerFn }>} PubsubAPI
+ * @typedef {import('../types').Options} Options
  */
 
-module.exports = configure((api, options) => {
-  const subsTracker = SubscriptionTracker.singleton()
+/**
+ * @param {Options} options
+ * @param {import('./subscription-tracker').SubscriptionTracker} subsTracker
+ */
+export const createSubscribe = (options, subsTracker) => {
+  return configure((api) => {
+    /**
+     * @type {PubsubAPI["subscribe"]}
+     */
+    async function subscribe (topic, handler, options = {}) { // eslint-disable-line require-await
+      options.signal = subsTracker.subscribe(topic, handler, options.signal)
 
-  /**
-   * @type {PubsubAPI["subscribe"]}
-   */
-  async function subscribe (topic, handler, options = {}) { // eslint-disable-line require-await
-    options.signal = subsTracker.subscribe(topic, handler, options.signal)
+      /** @type {(value?: any) => void} */
+      let done
+      /** @type {(error: Error) => void} */
+      let fail
 
-    /** @type {(value?: any) => void} */
-    let done
-    /** @type {(error: Error) => void} */
-    let fail
+      const result = new Promise((resolve, reject) => {
+        done = resolve
+        fail = reject
+      })
 
-    const result = new Promise((resolve, reject) => {
-      done = resolve
-      fail = reject
-    })
+      // In Firefox, the initial call to fetch does not resolve until some data
+      // is received. If this doesn't happen within 1 second assume success
+      const ffWorkaround = setTimeout(() => done(), 1000)
 
-    // In Firefox, the initial call to fetch does not resolve until some data
-    // is received. If this doesn't happen within 1 second assume success
-    const ffWorkaround = setTimeout(() => done(), 1000)
-
-    // Do this async to not block Firefox
-    setTimeout(() => {
+      // Do this async to not block Firefox
       api.post('pubsub/sub', {
-        timeout: options.timeout,
         signal: options.signal,
         searchParams: toUrlSearchParams({
-          arg: topic,
+          arg: textToUrlSafeRpc(topic),
           ...options
         }),
         headers: options.headers
@@ -63,19 +63,32 @@ module.exports = configure((api, options) => {
           }
 
           readMessages(response, {
-            onMessage: handler,
+            onMessage: (message) => {
+              if (!handler) {
+                return
+              }
+
+              if (typeof handler === 'function') {
+                handler(message)
+                return
+              }
+
+              if (typeof handler.handleEvent === 'function') {
+                handler.handleEvent(message)
+              }
+            },
             onEnd: () => subsTracker.unsubscribe(topic, handler),
             onError: options.onError
           })
 
           done()
         })
-    }, 0)
 
-    return result
-  }
-  return subscribe
-})
+      return result
+    }
+    return subscribe
+  })(options)
+}
 
 /**
  * @param {import('ipfs-utils/src/types').ExtendedResponse} response
@@ -95,17 +108,17 @@ async function readMessages (response, { onMessage, onEnd, onError }) {
         }
 
         onMessage({
-          from: uint8ArrayToString(uint8ArrayFromString(msg.from, 'base64pad'), 'base58btc'),
-          data: uint8ArrayFromString(msg.data, 'base64pad'),
-          seqno: uint8ArrayFromString(msg.seqno, 'base64pad'),
-          topicIDs: msg.topicIDs
+          from: peerIdFromString(msg.from),
+          data: rpcToBytes(msg.data),
+          sequenceNumber: rpcToBigInt(msg.seqno),
+          topic: rpcToText(msg.topicIDs[0])
         })
-      } catch (err) {
+      } catch (/** @type {any} */ err) {
         err.message = `Failed to parse pubsub message: ${err.message}`
         onError(err, false, msg) // Not fatal
       }
     }
-  } catch (err) {
+  } catch (/** @type {any} */ err) {
     if (!isAbortError(err)) {
       onError(err, true) // Fatal
     }

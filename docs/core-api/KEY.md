@@ -278,7 +278,7 @@ An optional object which may have the following keys:
 ### Example
 
 ```JavaScript
-const key = await ipfs.key.import('clone', 'password')
+const key = await ipfs.key.import('clone', pem, 'password')
 
 console.log(key)
 // { id: 'QmQRiays958UM7norGRQUG3tmrLq8pJdmJarwYSk2eLthQ',
@@ -288,5 +288,5 @@ console.log(key)
 A great source of [examples][] can be found in the tests for this API.
 
 [examples]: https://github.com/ipfs/js-ipfs/blob/master/packages/interface-ipfs-core/src/key
-[cid]: https://www.npmjs.com/package/cids
+[cid]: https://docs.ipfs.io/concepts/content-addressing
 [AbortSignal]: https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal

@@ -1,36 +1,36 @@
-'use strict'
+import parseDuration from 'parse-duration'
+import { coerceMultiaddr } from '../../utils.js'
 
-const { default: parseDuration } = require('parse-duration')
-const { coerceMultiaddr } = require('../../utils')
+/**
+ * @typedef {object} Argv
+ * @property {import('../../types').Context} Argv.ctx
+ * @property {import('@multiformats/multiaddr').Multiaddr} Argv.peer
+ * @property {boolean} Argv.all
+ * @property {number} Argv.timeout
+ */
 
-module.exports = {
+/** @type {import('yargs').CommandModule<Argv, Argv>} */
+const command = {
   command: 'rm [<peer>]',
 
   describe: 'Removes peers from the bootstrap list',
 
   builder: {
     peer: {
-      type: 'string',
+      string: true,
       coerce: coerceMultiaddr
     },
     all: {
-      type: 'boolean',
-      describe: 'Remove all bootstrap peers.',
+      boolean: true,
+      describe: 'Remove all bootstrap peers',
       default: false
     },
     timeout: {
-      type: 'string',
+      string: true,
       coerce: parseDuration
     }
   },
 
-  /**
-   * @param {object} argv
-   * @param {import('../../types').Context} argv.ctx
-   * @param {import('multiaddr').Multiaddr} argv.peer
-   * @param {boolean} argv.all
-   * @param {number} argv.timeout
-   */
   async handler ({ ctx: { ipfs, print }, all, peer, timeout }) {
     let list
 
@@ -49,3 +49,5 @@ module.exports = {
     list.Peers.forEach((peer) => print(peer.toString()))
   }
 }
+
+export default command

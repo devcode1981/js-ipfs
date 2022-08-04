@@ -1,57 +1,59 @@
 /* eslint-env mocha */
-'use strict'
 
-const { getDescribe, getIt, expect } = require('../utils/mocha')
-const all = require('it-all')
-const drain = require('it-drain')
-const testTimeout = require('../utils/test-timeout')
+import { expect } from 'aegir/chai'
+import { getDescribe, getIt } from '../utils/mocha.js'
+import drain from 'it-drain'
+import testTimeout from '../utils/test-timeout.js'
+import { ensureReachable } from './utils.js'
 
-/** @typedef { import("ipfsd-ctl/src/factory") } Factory */
 /**
- * @param {Factory} common
- * @param {Object} options
+ * @typedef {import('ipfsd-ctl').Factory} Factory
  */
-module.exports = (common, options) => {
+
+/**
+ * @param {Factory} factory
+ * @param {object} options
+ */
+export function testQuery (factory, options) {
   const describe = getDescribe(options)
   const it = getIt(options)
 
   describe('.dht.query', function () {
     this.timeout(80 * 1000)
 
+    /** @type {import('ipfs-core-types').IPFS} */
     let nodeA
+    /** @type {import('ipfs-core-types').IPFS} */
     let nodeB
 
     before(async () => {
-      nodeA = (await common.spawn()).api
-      nodeB = (await common.spawn()).api
-      await nodeB.swarm.connect(nodeA.peerId.addresses[0])
+      nodeA = (await factory.spawn()).api
+      nodeB = (await factory.spawn()).api
+
+      await ensureReachable(nodeA, nodeB)
     })
 
-    after(() => common.clean())
+    after(() => factory.clean())
 
-    it('should respect timeout option when querying the DHT', () => {
-      return testTimeout(() => drain(nodeA.dht.query(nodeB.peerId.id, {
+    it('should respect timeout option when querying the DHT', async () => {
+      const nodeBId = await nodeB.id()
+
+      return testTimeout(() => drain(nodeA.dht.query(nodeBId.id, {
         timeout: 1
       })))
     })
 
     it('should return the other node in the query', async function () {
-      const timeout = 150 * 1000
-      this.timeout(timeout)
-
-      try {
-        const peers = await all(nodeA.dht.query(nodeB.peerId.id, { timeout: timeout - 1000 }))
-        expect(peers.map(p => p.id.toString())).to.include(nodeB.peerId.id)
-      } catch (err) {
-        if (err.name === 'TimeoutError') {
-          // This test is meh. DHT works best with >= 20 nodes. Therefore a
-          // failure might happen, but we don't want to report it as such.
-          // Hence skip the test before the timeout is reached
-          this.skip()
-        } else {
-          throw err
+      /** @type {string[]} */
+      const peers = []
+      const nodeBId = await nodeB.id()
+      for await (const event of nodeA.dht.query(nodeBId.id)) {
+        if (event.name === 'PEER_RESPONSE') {
+          peers.push(...event.closer.map(data => data.id.toString()))
         }
       }
+
+      expect(peers).to.include(nodeBId.id.toString())
     })
   })
 }

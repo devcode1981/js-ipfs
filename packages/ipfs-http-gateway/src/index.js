@@ -1,10 +1,10 @@
-'use strict'
+import Hapi from '@hapi/hapi'
+import Pino from 'hapi-pino'
+import { logger, enabled } from '@libp2p/logger'
+// @ts-expect-error no types
+import toMultiaddr from 'uri-to-multiaddr'
+import routes from './routes/index.js'
 
-const Hapi = require('@hapi/hapi')
-const Pino = require('hapi-pino')
-const debug = require('debug')
-// @ts-ignore no types
-const toMultiaddr = require('uri-to-multiaddr')
 const LOG = 'ipfs:http-gateway'
 const LOG_ERROR = 'ipfs:http-gateway:error'
 
@@ -51,15 +51,13 @@ async function serverCreator (serverAddrs, createServer, ipfs) {
   return servers
 }
 
-class HttpGateway {
+export class HttpGateway {
   /**
    * @param {IPFS} ipfs
    */
   constructor (ipfs) {
     this._ipfs = ipfs
-    this._log = Object.assign(debug(LOG), {
-      error: debug(LOG_ERROR)
-    })
+    this._log = logger(LOG)
     /** @type {Server[]} */
     this._gatewayServers = []
   }
@@ -68,8 +66,6 @@ class HttpGateway {
     this._log('starting')
 
     const ipfs = this._ipfs
-
-    // @ts-ignore TODO: move config typedefs to repo
     const config = await ipfs.config.getAll()
     const addresses = config.Addresses || { Swarm: [], Gateway: [] }
     const gatewayAddrs = addresses?.Gateway || []
@@ -77,7 +73,6 @@ class HttpGateway {
     this._gatewayServers = await serverCreator(gatewayAddrs, this._createGatewayServer, ipfs)
 
     this._log('started')
-    return this
   }
 
   /**
@@ -101,13 +96,13 @@ class HttpGateway {
     await server.register({
       plugin: Pino,
       options: {
-        prettyPrint: Boolean(debug.enabled(LOG)),
+        prettyPrint: Boolean(enabled(LOG)),
         logEvents: ['onPostStart', 'onPostStop', 'response', 'request-error'],
-        level: debug.enabled(LOG) ? 'debug' : (debug.enabled(LOG_ERROR) ? 'error' : 'fatal')
+        level: enabled(LOG) ? 'debug' : (enabled(LOG_ERROR) ? 'error' : 'fatal')
       }
     })
 
-    server.route(require('./routes'))
+    server.route(routes.gateway)
 
     return server
   }
@@ -124,5 +119,3 @@ class HttpGateway {
     this._log('stopped')
   }
 }
-
-module.exports = HttpGateway

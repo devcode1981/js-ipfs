@@ -1,38 +1,39 @@
-'use strict'
+import parseDuration from 'parse-duration'
 
-const multibase = require('multibase')
-const { cidToString } = require('ipfs-core-utils/src/cid')
-const { default: parseDuration } = require('parse-duration')
+/**
+ * @typedef {object} Argv
+ * @property {import('../../types').Context} Argv.ctx
+ * @property {'unixfs-dir'} Argv.template
+ * @property {string} Argv.cidBase
+ * @property {number} Argv.timeout
+ */
 
-module.exports = {
+/** @type {import('yargs').CommandModule<Argv, Argv>} */
+const command = {
   command: 'new [<template>]',
 
   describe: 'Create new ipfs objects',
 
   builder: {
     'cid-base': {
-      describe: 'Number base to display CIDs in. Note: specifying a CID base for v0 CIDs will have no effect.',
-      type: 'string',
-      choices: Object.keys(multibase.names)
+      describe: 'Number base to display CIDs in. Note: specifying a CID base for v0 CIDs will have no effect',
+      string: true,
+      default: 'base58btc'
     },
     timeout: {
-      type: 'string',
+      string: true,
       coerce: parseDuration
     }
   },
 
-  /**
-   * @param {object} argv
-   * @param {import('../../types').Context} argv.ctx
-   * @param {'unixfs-dir'} argv.template
-   * @param {import('multibase').BaseName} argv.cidBase
-   * @param {number} argv.timeout
-   */
   async handler ({ ctx: { ipfs, print }, template, cidBase, timeout }) {
     const cid = await ipfs.object.new({
       template,
       timeout
     })
-    print(cidToString(cid, { base: cidBase, upgrade: false }))
+    const base = await ipfs.bases.getBase(cidBase)
+    print(cid.toString(base.encoder))
   }
 }
+
+export default command

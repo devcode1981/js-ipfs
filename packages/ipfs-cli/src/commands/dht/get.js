@@ -1,35 +1,40 @@
-'use strict'
+import parseDuration from 'parse-duration'
+import { coerceCID } from '../../utils.js'
+import { toString as uint8ArrayToString } from 'uint8arrays/to-string'
 
-const { default: parseDuration } = require('parse-duration')
-const { coerceCID } = require('../../utils')
-const uint8ArrayToString = require('uint8arrays/to-string')
+/**
+ * @typedef {object} Argv
+ * @property {import('../../types').Context} Argv.ctx
+ * @property {import('multiformats/cid').CID} Argv.key
+ * @property {number} Argv.timeout
+ */
 
-module.exports = {
+/** @type {import('yargs').CommandModule<Argv, Argv>} */
+const command = {
   command: 'get <key>',
 
-  describe: 'Given a key, query the routing system for its best value.',
+  describe: 'Given a key, query the routing system for its best value',
 
   builder: {
     key: {
-      type: 'string',
+      string: true,
       coerce: coerceCID
     },
     timeout: {
-      type: 'string',
+      string: true,
       coerce: parseDuration
     }
   },
 
-  /**
-   * @param {object} argv
-   * @param {import('../../types').Context} argv.ctx
-   * @param {import('cids')} argv.key
-   * @param {number} argv.timeout
-   */
   async handler ({ ctx: { ipfs, print }, key, timeout }) {
-    const value = await ipfs.dht.get(key.bytes, {
+    for await (const event of await ipfs.dht.get(key.bytes, {
       timeout
-    })
-    print(uint8ArrayToString(value, 'base58btc'))
+    })) {
+      if (event.name === 'VALUE') {
+        print(uint8ArrayToString(event.value, 'base58btc'))
+      }
+    }
   }
 }
+
+export default command

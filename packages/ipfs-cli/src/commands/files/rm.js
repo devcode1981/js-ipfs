@@ -1,11 +1,18 @@
-'use strict'
-
-const {
+import {
   asBoolean
-} = require('../../utils')
-const { default: parseDuration } = require('parse-duration')
+} from '../../utils.js'
+import parseDuration from 'parse-duration'
 
-module.exports = {
+/**
+ * @typedef {object} Argv
+ * @property {import('../../types').Context} Argv.ctx
+ * @property {string} Argv.path
+ * @property {boolean} Argv.recursive
+ * @property {number} Argv.timeout
+ */
+
+/** @type {import('yargs').CommandModule<Argv, Argv>} */
+const command = {
   command: 'rm <path>',
 
   describe: 'Remove an mfs file or directory',
@@ -13,33 +20,28 @@ module.exports = {
   builder: {
     recursive: {
       alias: 'r',
-      type: 'boolean',
+      boolean: true,
       default: false,
       coerce: asBoolean,
       describe: 'Remove directories recursively'
     },
     timeout: {
-      type: 'string',
+      string: true,
       coerce: parseDuration
     }
   },
 
-  /**
-   * @param {object} argv
-   * @param {import('../../types').Context} argv.ctx
-   * @param {string} argv.path
-   * @param {boolean} argv.recursive
-   * @param {number} argv.timeout
-   */
-  handler ({
+  async handler ({
     ctx: { ipfs },
     path,
     recursive,
     timeout
   }) {
-    return ipfs.files.rm(path, {
+    await ipfs.files.rm(path, {
       recursive,
       timeout
     })
   }
 }
+
+export default command

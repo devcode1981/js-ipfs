@@ -1,11 +1,19 @@
-'use strict'
-
-const { default: parseDuration } = require('parse-duration')
-const {
+import parseDuration from 'parse-duration'
+import {
   stripControlCharacters
-} = require('../../utils')
+} from '../../utils.js'
 
-module.exports = {
+/**
+ * @typedef {object} Argv
+ * @property {import('../../types').Context} Argv.ctx
+ * @property {string} Argv.name
+ * @property {string} Argv.type
+ * @property {number} Argv.size
+ * @property {number} Argv.timeout
+ */
+
+/** @type {import('yargs').CommandModule<Argv, Argv>} */
+const command = {
   command: 'gen <name>',
 
   describe: 'Create a new key',
@@ -13,35 +21,30 @@ module.exports = {
   builder: {
     type: {
       alias: 't',
-      describe: 'type of the key to create [rsa, ed25519].',
-      default: 'rsa'
+      describe: 'type of the key to create',
+      choices: ['rsa', 'ed25519'],
+      default: 'ed25519'
     },
     size: {
       alias: 's',
-      describe: 'size of the key to generate.',
+      describe: 'size of the key to generate',
       default: 2048,
-      type: 'number'
+      number: true
     },
     timeout: {
-      type: 'string',
+      string: true,
       coerce: parseDuration
     }
   },
 
-  /**
-   * @param {object} argv
-   * @param {import('../../types').Context} argv.ctx
-   * @param {string} argv.name
-   * @param {string} argv.type
-   * @param {number} argv.size
-   * @param {number} argv.timeout
-   */
   async handler ({ ctx: { ipfs, print }, name, type, size, timeout }) {
     const key = await ipfs.key.gen(name, {
-      type,
+      type: type.toLowerCase() === 'rsa' ? 'RSA' : 'Ed25519',
       size,
       timeout
     })
     print(`generated ${key.id} ${stripControlCharacters(key.name)}`)
   }
 }
+
+export default command

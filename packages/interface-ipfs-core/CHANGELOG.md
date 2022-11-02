@@ -3,6 +3,62 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.157.0](https://www.github.com/ipfs/js-ipfs/compare/interface-ipfs-core-v0.156.1...interface-ipfs-core-v0.157.0) (2022-10-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* ipfs is now bundled with libp2p@0.40.x which has different config
+* require IPNS V2 signatures (#4207)
+
+### Features
+
+* upgrade libp2p to 0.40.x ([#4237](https://www.github.com/ipfs/js-ipfs/issues/4237)) ([0cee4a4](https://www.github.com/ipfs/js-ipfs/commit/0cee4a4c55767022584dcbade0b0b9b43326f9c9))
+
+
+### Bug Fixes
+
+* require IPNS V2 signatures ([#4207](https://www.github.com/ipfs/js-ipfs/issues/4207)) ([d1b0a8a](https://www.github.com/ipfs/js-ipfs/commit/d1b0a8a71073b4ece0dbda5a5405d76dd8d5b358))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * ipfs-core-types bumped from ^0.12.1 to ^0.13.0
+
+### [0.156.1](https://www.github.com/ipfs/js-ipfs/compare/interface-ipfs-core-v0.156.0...interface-ipfs-core-v0.156.1) (2022-09-21)
+
+
+### Bug Fixes
+
+* update @multiformats/multiadd to 11.0.0 ([2a830bf](https://www.github.com/ipfs/js-ipfs/commit/2a830bf58a5929fcce51dede871c99f62192fbda))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * ipfs-core-types bumped from ^0.12.0 to ^0.12.1
+
+## [0.156.0](https://www.github.com/ipfs/js-ipfs/compare/interface-ipfs-core-v0.155.2...interface-ipfs-core-v0.156.0) (2022-09-06)
+
+
+### ⚠ BREAKING CHANGES
+
+* update to libp2p@0.38.x (#4151)
+
+### deps
+
+* update to libp2p@0.38.x ([#4151](https://www.github.com/ipfs/js-ipfs/issues/4151)) ([39dbf70](https://www.github.com/ipfs/js-ipfs/commit/39dbf708ec31b263115e44f420651fa4e056a89e))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * ipfs-core-types bumped from ^0.11.0 to ^0.12.0
+
 ### [0.155.2](https://www.github.com/ipfs/js-ipfs/compare/interface-ipfs-core-v0.155.1...interface-ipfs-core-v0.155.2) (2022-06-24)
 
 

@@ -2,20 +2,20 @@ import get from 'dlv'
 import mergeOpts from 'merge-options'
 import errCode from 'err-code'
 import { routers } from 'ipfs-core-config/libp2p-pubsub-routers'
-import { DelegatedPeerRouting } from '@libp2p/delegated-peer-routing'
-import { DelegatedContentRouting } from '@libp2p/delegated-content-routing'
+import { delegatedPeerRouting } from '@libp2p/delegated-peer-routing'
+import { delegatedContentRouting } from '@libp2p/delegated-content-routing'
 import { create as ipfsHttpClient } from 'ipfs-http-client'
-import { Multiaddr } from '@multiformats/multiaddr'
+import { multiaddr } from '@multiformats/multiaddr'
 import { ipfsCore as pkgversion } from '../version.js'
 import { libp2pConfig as getEnvLibp2pOptions } from 'ipfs-core-config/libp2p'
 import { createLibp2p as createNode } from 'libp2p'
-import { KadDHT } from '@libp2p/kad-dht'
-import { Bootstrap } from '@libp2p/bootstrap'
+import { kadDHT } from '@libp2p/kad-dht'
+import { bootstrap } from '@libp2p/bootstrap'
 import { ipnsValidator } from 'ipns/validator'
 import { ipnsSelector } from 'ipns/selector'
-import { WebSockets } from '@libp2p/websockets'
-import { Mplex } from '@libp2p/mplex'
-import { NOISE } from '@chainsafe/libp2p-noise'
+import { webSockets } from '@libp2p/websockets'
+import { mplex } from '@libp2p/mplex'
+import { noise } from '@chainsafe/libp2p-noise'
 
 const mergeOptions = mergeOpts.bind({ ignoreUndefined: true, concatArrays: true })
 
@@ -31,11 +31,12 @@ const mergeOptions = mergeOpts.bind({ ignoreUndefined: true, concatArrays: true 
  * @property {DekOptions} [dek]
  *
  * @typedef {import('ipfs-repo').IPFSRepo} Repo
- * @typedef {import('@libp2p/interfaces/peer-id').PeerId} PeerId
+ * @typedef {import('@libp2p/interface-peer-id').PeerId} PeerId
  * @typedef {import('../types').Options} IPFSOptions
  * @typedef {import('libp2p').Libp2p} LibP2P
  * @typedef {import('libp2p').Libp2pOptions} Libp2pOptions
  * @typedef {import('ipfs-core-types/src/config').Config} IPFSConfig
+ * @typedef {import('@multiformats/multiaddr').Multiaddr} Multiaddr
  */
 
 /**
@@ -124,13 +125,13 @@ function getLibp2pOptions ({ options, config, datastore, keychainConfig, peerId,
     peerDiscovery: [],
     transports: [],
     streamMuxers: [
-      new Mplex({
-        // temporary fix until we can limit streams on a per-protocol basis
-        maxStreamsPerConnection: Infinity
+      mplex({
+        maxInboundStreams: 256,
+        maxOutboundStreams: 1024
       })
     ],
     connectionEncryption: [
-      NOISE
+      noise()
     ],
     relay: {
       enabled: get(options, 'relay.enabled', get(config, 'relay.enabled', true)),
@@ -149,7 +150,7 @@ function getLibp2pOptions ({ options, config, datastore, keychainConfig, peerId,
   }
 
   if (get(config, 'Routing.Type', 'dhtclient') !== 'none') {
-    libp2pOptions.dht = new KadDHT({
+    libp2pOptions.dht = kadDHT({
       clientMode: get(config, 'Routing.Type', 'dht') !== 'dhtserver',
       kBucketSize: get(options, 'dht.kBucketSize', 20),
       validators: {
@@ -165,7 +166,7 @@ function getLibp2pOptions ({ options, config, datastore, keychainConfig, peerId,
 
   if (boostrapNodes.length > 0) {
     libp2pOptions.peerDiscovery?.push(
-      new Bootstrap({
+      bootstrap({
         list: boostrapNodes
       })
     )
@@ -195,7 +196,7 @@ function getLibp2pOptions ({ options, config, datastore, keychainConfig, peerId,
   if (delegateHosts.length > 0) {
     // Pick a random delegate host
     const delegateString = delegateHosts[Math.floor(Math.random() * delegateHosts.length)]
-    const delegateAddr = new Multiaddr(delegateString).toOptions()
+    const delegateAddr = multiaddr(delegateString).toOptions()
     const delegateApiOptions = {
       host: delegateAddr.host,
       // port is a string atm, so we need to convert for the check
@@ -206,13 +207,20 @@ function getLibp2pOptions ({ options, config, datastore, keychainConfig, peerId,
 
     const delegateHttpClient = ipfsHttpClient(delegateApiOptions)
 
-    libp2pFinalConfig.contentRouters?.push(new DelegatedContentRouting(delegateHttpClient))
-    libp2pFinalConfig.peerRouters?.push(new DelegatedPeerRouting(delegateHttpClient))
+    libp2pFinalConfig.contentRouters?.push(delegatedContentRouting(delegateHttpClient))
+    libp2pFinalConfig.peerRouters?.push(delegatedPeerRouting(delegateHttpClient))
   }
 
+  // TODO: fixme
   if (!get(options, 'config.Discovery.MDNS.Enabled', get(config, 'Discovery.MDNS.Enabled', true))) {
     libp2pFinalConfig.peerDiscovery = libp2pFinalConfig.peerDiscovery?.filter(d => {
-      return d != null && d[Symbol.toStringTag] !== '@libp2p/mdns'
+      try {
+        if (typeof d === 'function') {
+          // @ts-expect-error not components
+          return d({})[Symbol.toStringTag] !== '@libp2p/mdns'
+        }
+      } catch {}
+      return true
     })
   }
 
@@ -221,8 +229,15 @@ function getLibp2pOptions ({ options, config, datastore, keychainConfig, peerId,
   }
 
   // add WebSocket transport if not overridden by user config
-  if (libp2pFinalConfig.transports.find(t => t[Symbol.toStringTag] === '@libp2p/websockets') == null) {
-    libp2pFinalConfig.transports.push(new WebSockets())
+  if (libp2pFinalConfig.transports.find(t => {
+    try {
+      if (typeof t === 'function') {
+        return t({})[Symbol.toStringTag] === '@libp2p/websockets'
+      }
+    } catch {}
+    return false
+  }) == null) {
+    libp2pFinalConfig.transports.push(webSockets())
   }
 
   return libp2pFinalConfig

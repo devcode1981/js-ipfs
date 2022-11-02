@@ -3,6 +3,78 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.17.0](https://www.github.com/ipfs/js-ipfs/compare/ipfs-core-v0.16.1...ipfs-core-v0.17.0) (2022-10-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* ipfs is now bundled with libp2p@0.40.x which has different config
+* require IPNS V2 signatures (#4207)
+
+### Features
+
+* upgrade libp2p to 0.40.x ([#4237](https://www.github.com/ipfs/js-ipfs/issues/4237)) ([0cee4a4](https://www.github.com/ipfs/js-ipfs/commit/0cee4a4c55767022584dcbade0b0b9b43326f9c9))
+
+
+### Bug Fixes
+
+* replace slice with subarray for increased performance ([#4210](https://www.github.com/ipfs/js-ipfs/issues/4210)) ([dfc43d4](https://www.github.com/ipfs/js-ipfs/commit/dfc43d4e9be67fdf25553677f469379d966ff806))
+* require IPNS V2 signatures ([#4207](https://www.github.com/ipfs/js-ipfs/issues/4207)) ([d1b0a8a](https://www.github.com/ipfs/js-ipfs/commit/d1b0a8a71073b4ece0dbda5a5405d76dd8d5b358))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * ipfs-core-config bumped from ^0.5.1 to ^0.6.0
+    * ipfs-core-types bumped from ^0.12.1 to ^0.13.0
+    * ipfs-core-utils bumped from ^0.16.1 to ^0.17.0
+    * ipfs-http-client bumped from ^58.0.1 to ^59.0.0
+  * devDependencies
+    * interface-ipfs-core bumped from ^0.156.1 to ^0.157.0
+
+### [0.16.1](https://www.github.com/ipfs/js-ipfs/compare/ipfs-core-v0.16.0...ipfs-core-v0.16.1) (2022-09-21)
+
+
+### Bug Fixes
+
+* update @multiformats/multiadd to 11.0.0 ([2a830bf](https://www.github.com/ipfs/js-ipfs/commit/2a830bf58a5929fcce51dede871c99f62192fbda))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * ipfs-core-config bumped from ^0.5.0 to ^0.5.1
+    * ipfs-core-types bumped from ^0.12.0 to ^0.12.1
+    * ipfs-core-utils bumped from ^0.16.0 to ^0.16.1
+    * ipfs-http-client bumped from ^58.0.0 to ^58.0.1
+  * devDependencies
+    * interface-ipfs-core bumped from ^0.156.0 to ^0.156.1
+
+## [0.16.0](https://www.github.com/ipfs/js-ipfs/compare/ipfs-core-v0.15.4...ipfs-core-v0.16.0) (2022-09-06)
+
+
+### ⚠ BREAKING CHANGES
+
+* update to libp2p@0.38.x (#4151)
+
+### deps
+
+* update to libp2p@0.38.x ([#4151](https://www.github.com/ipfs/js-ipfs/issues/4151)) ([39dbf70](https://www.github.com/ipfs/js-ipfs/commit/39dbf708ec31b263115e44f420651fa4e056a89e))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * ipfs-core-config bumped from ^0.4.0 to ^0.5.0
+    * ipfs-core-types bumped from ^0.11.0 to ^0.12.0
+    * ipfs-core-utils bumped from ^0.15.0 to ^0.16.0
+    * ipfs-http-client bumped from ^57.0.0 to ^58.0.0
+  * devDependencies
+    * interface-ipfs-core bumped from ^0.155.0 to ^0.156.0
+
 ### [0.15.4](https://www.github.com/ipfs/js-ipfs/compare/ipfs-core-v0.15.3...ipfs-core-v0.15.4) (2022-06-24)
 
 
